@@ -217,7 +217,7 @@ Page({
 
         wx.toast({ title: '绑定成功', icon: 'success' });
         setTimeout(() => {
-          wx.navigateTo({ url: '/pages/home/home' });
+          wx.switchTab({ url: '/pages/home/home' });
         }, 1000);
       } else {
         logger.warn('设备绑定被服务端拒绝', { error: bindRes });

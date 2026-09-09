@@ -6,6 +6,7 @@ const { requestAlarmSubscription } = require('../../utils/alarmSubscription');
 Page({
   data: {
     isLogin: false,
+    userInfo: {},
     alarms: [],
     loading: false,
     loadError: false,
@@ -18,17 +19,9 @@ Page({
     handledLoadError: false,
     handledHasMore: false,
     handledPage: 1,
-    statusBarHeight: 0,
     handlingId: '',
     subscribing: false,
     subscriptionAccepted: false
-  },
-
-  onLoad() {
-    const windowInfo = typeof wx.getWindowInfo === 'function'
-      ? wx.getWindowInfo()
-      : wx.getSystemInfoSync();
-    this.setData({ statusBarHeight: windowInfo.statusBarHeight || 0 });
   },
 
   async onShow() {
@@ -37,7 +30,11 @@ Page({
     const outcome = await getApp().authNavigation.restore({ target: '/pages/alarms/alarms' });
     this.authChecking = false;
     if (outcome.type === 'ready') {
-      this.setData({ isLogin: true, authRetryNeeded: false });
+      this.setData({
+        isLogin: true,
+        userInfo: getApp().globalData.userInfo || {},
+        authRetryNeeded: false
+      });
       this.loadAlarms(true);
       return;
     }
@@ -231,7 +228,7 @@ Page({
     wx.navigateTo({ url: '/pages/login/login' });
   },
 
-  goDevices() {
-    wx.navigateTo({ url: '/pages/home/home' });
+  goProfile() {
+    wx.navigateTo({ url: '/pages/setting/setting' });
   }
 });

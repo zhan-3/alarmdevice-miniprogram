@@ -1,8 +1,8 @@
 {
 "pages": [
-    "pages/login/login",
     "pages/alarms/alarms",
     "pages/home/home",
+    "pages/login/login",
     "pages/device-detail/device-detail",
     "pages/setting/setting",
     "pages/audio/audio",
@@ -10,11 +10,31 @@
   ],
   "window": {
     "backgroundTextStyle": "dark",
-    "navigationBarBackgroundColor": "#FF7A00",
+    "navigationBarBackgroundColor": "#C94F00",
     "navigationBarTitleText": "报警系统",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#FFFFFF",
     "navigationStyle": "default"
+  },
+  "tabBar": {
+    "color": "#8A8A8A",
+    "selectedColor": "#FF7A00",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/alarms/alarms",
+        "text": "报警",
+        "iconPath": "images/tabbar/alarm.png",
+        "selectedIconPath": "images/tabbar/alarm-active.png"
+      },
+      {
+        "pagePath": "pages/home/home",
+        "text": "设备",
+        "iconPath": "images/tabbar/device.png",
+        "selectedIconPath": "images/tabbar/device-active.png"
+      }
+    ]
   },
 
   "permission": {

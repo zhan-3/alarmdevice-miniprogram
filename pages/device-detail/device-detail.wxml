@@ -23,46 +23,50 @@
       markers="{{markers}}"
       show-location
     ></map>
-    <view wx:else class="device-map map-empty">位置数据不可用</view>
-    <view class="map-overlay">
-      <view class="overlay-left">
-        <view class="device-name-row">
-          <text class="device-name-text">{{device.name}}</text>
-          <view class="alarm-badge {{device.status}}">
-            <text wx:if="{{device.status === 'alarm'}}">报警中</text>
-            <text wx:elif="{{device.status === 'normal'}}">正常</text>
-            <text wx:elif="{{device.status === 'offline'}}">离线</text>
-            <text wx:else>数据不可用</text>
-          </view>
-        </view>
-        <view class="address-row">
-          <app-icon name="map-pin" size="14" muted="{{true}}" />
-          <text class="address-text">安装位置：{{device.address || '请设置安装位置'}}</text>
+    <view wx:else class="device-map map-empty">暂未设置安装位置</view>
+  </view>
+
+  <view class="device-overview">
+    <view class="device-summary">
+      <view class="device-name-row">
+        <text class="device-name-text">{{device.name}}</text>
+        <view class="alarm-badge {{device.status}}">
+          <text wx:if="{{device.status === 'alarm'}}">报警中</text>
+          <text wx:elif="{{device.status === 'normal'}}">正常</text>
+          <text wx:elif="{{device.status === 'offline'}}">离线</text>
+          <text wx:else>数据不可用</text>
         </view>
       </view>
-      <view class="overlay-right">
-        <view class="quick-action nav-action" bindtap="startNavigation">
-          <image class="action-img" src="/images/navigator.png" mode="aspectFit" />
-          <text class="action-label">导航</text>
-        </view>
-        <view class="quick-action audio-action" bindtap="goAudioPage">
-          <image class="action-img" src="/images/voice.png" mode="aspectFit" />
-          <text class="action-label">录音</text>
-        </view>
-        <view class="quick-action setting-action" bindtap="goSetting">
-          <image class="action-img" src="/images/setting.png" mode="aspectFit" />
-          <text class="action-label">设置</text>
-        </view>
+      <view class="address-row">
+        <app-icon name="map-pin" size="14" muted="{{true}}" />
+        <text class="address-text">安装位置：{{device.address || '请设置安装位置'}}</text>
+      </view>
+    </view>
+
+    <view class="quick-actions">
+      <view class="quick-action nav-action" bindtap="startNavigation" aria-role="button" aria-label="导航到设备安装位置">
+        <image class="action-img" src="/images/navigator.png" mode="aspectFit" />
+        <text class="action-label">导航</text>
+      </view>
+      <view class="quick-action audio-action" bindtap="goAudioPage" aria-role="button" aria-label="查看报警录音">
+        <image class="action-img" src="/images/voice.png" mode="aspectFit" />
+        <text class="action-label">录音</text>
+      </view>
+      <view class="quick-action setting-action" bindtap="goSetting" aria-role="button" aria-label="打开设备设置">
+        <image class="action-img" src="/images/setting.png" mode="aspectFit" />
+        <text class="action-label">设置</text>
       </view>
     </view>
   </view>
 
-  <white-card title="其他紧急联系人" customClass="contact-card" showRightContent="true">
+  <white-card title="报警联系人" customClass="contact-card" showRightContent="true">
     <view slot="rightContent">
       <view class="add-btn" bindtap="showAddContact" aria-label="添加其他紧急联系人">
         <app-icon name="plus" size="18" />
       </view>
     </view>
+
+    <view class="contact-helper">你自己默认接收报警通知，以下为额外联系人</view>
 
     <view wx:for="{{device.contacts}}" wx:key="id" class="contact-item-wrap {{swipeId === item.id && swipeOffset < 0 ? 'swiped' : ''}}">
       <view

@@ -1,106 +1,67 @@
 .container {
   padding: 20px 15px 15px;
-  background: #f6f6f6;
+  background: #f5f4f2;
   min-height: 100vh;
 }
 
-.head-card {
-  background: linear-gradient(135deg, #E86A00 0%, #FF7A00 50%, #FF9933 100%);
-  box-shadow: 0 4rpx 12rpx rgba(255, 122, 0, 0.2);
-  border-radius: 16px;
-  padding: 20px 18px;
+.device-toolbar {
   display: flex;
   align-items: center;
-  color: #fff;
-  margin-bottom: 18px;
-  margin-top: 10px;
-  background-size: 200% 200%;
-  animation: gradientMove 8s ease infinite;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 4px 2px 16px;
 }
 
-@keyframes gradientMove {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+.device-total,
+.device-total-hint {
+  display: block;
 }
 
-.head-left { margin-right: 14px; }
-
-.avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
-}
-
-.head-center { flex: 1; }
-
-.username {
-  font-size: 17px;
+.device-total {
+  color: var(--text-main);
+  font-size: 20px;
   font-weight: 600;
-  text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.1);
+  line-height: 1.3;
 }
 
-.sub-text {
+.device-total-hint {
+  margin-top: 3px;
+  color: #777;
   font-size: 12px;
-  opacity: 0.9;
-  margin-top: 4px;
-  text-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.1);
 }
 
-.head-right { margin-left: 10px; }
-
-.login-btn {
-  background: #fff !important;
-  color: #FF7A00 !important;
+.add-device-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid #f2b16f;
+  border-radius: 22px;
+  background: #fff0e5;
+  color: var(--orange-dark);
   font-size: 13px;
-  padding: 4px 14px;
-  border-radius: 20px;
-  width: 80px !important;
-  box-shadow: 0 2rpx 6rpx rgba(255, 122, 0, 0.2);
+  font-weight: 600;
+  line-height: 1;
 }
 
-.login-tag {
-  font-size: 12px;
-  background: rgba(255,255,255,0.25);
-  padding: 4px 10px;
-  border-radius: 12px;
-  backdrop-filter: blur(4px);
+.add-device-button::after {
+  border: 0;
 }
 
 .device-card { margin-bottom: 15px; }
-
-.add-btn-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.add-btn {
-  color: var(--orange-primary);
-  font-size: 24rpx;
-  font-weight: bold;
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 50%;
-  background-color: var(--orange-light);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.add-btn:active {
-  background-color: var(--orange-primary);
-  color: #fff;
-}
 
 .device-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid #eee;
+  min-height: 72px;
+  padding: 13px 0;
+  border-bottom: 1px solid #f0eeeb;
+  box-sizing: border-box;
 }
 
 .device-item:last-child { border-bottom: none; }
@@ -138,8 +99,9 @@
 
 .device-status {
   font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 4px 11px;
+  border-radius: 14px;
+  font-weight: 500;
 }
 
 .device-status.alarm {
@@ -188,8 +150,8 @@
 .phone-banner {
   background: #fff8e1;
   border: 1px solid #ffe082;
-  border-radius: 12px;
-  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  padding: 13px 16px;
   margin-bottom: 16px;
   display: flex;
   align-items: center;

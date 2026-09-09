@@ -1,39 +1,4 @@
-<view class="custom-navigation" style="padding-top: {{statusBarHeight}}px;">
-  <text class="custom-navigation-title">报警</text>
-</view>
-
 <view class="container">
-  <view class="head-card">
-    <view class="head-icon">
-      <app-icon name="bell-white" size="28" label="报警记录" />
-    </view>
-    <view class="head-content">
-      <text class="head-title">报警记录</text>
-      <text class="head-subtitle">及时确认每一次设备报警</text>
-    </view>
-    <view class="manage-link" bindtap="goDevices" aria-label="进入设备管理">
-      <text>设备管理</text>
-      <text class="manage-arrow">›</text>
-    </view>
-  </view>
-
-  <view class="notice-bar">
-    <app-icon name="triangle-alert" size="18" label="说明" />
-    <text>这里记录设备曾经发出的报警；“已处理”仅表示人工确认，不代表设备当前状态。</text>
-  </view>
-
-  <view wx:if="{{isLogin}}" class="subscription-bar">
-    <view class="subscription-copy">
-      <text class="subscription-title">微信报警提醒</text>
-      <text class="subscription-hint">每次授权可接收一次设备报警通知</text>
-    </view>
-    <button
-      class="subscription-button {{subscribing || subscriptionAccepted ? 'btn-disabled' : ''}}"
-      bindtap="subscribeAlarmNotifications"
-      disabled="{{subscribing || subscriptionAccepted}}"
-    >{{subscribing ? '请求中…' : subscriptionAccepted ? '已订阅下一次提醒' : '订阅提醒'}}</button>
-  </view>
-
   <view wx:if="{{!isLogin}}" class="state-panel">
     <view class="state-icon"><app-icon name="inbox" size="44" muted="{{true}}" label="暂无报警记录" /></view>
     <text class="state-title">登录后查看报警记录</text>
@@ -43,8 +8,29 @@
 
   <block wx:else>
     <view class="alarm-section-heading">
-      <text class="alarm-section-title">待处理</text>
-      <text class="alarm-section-note">需要人工确认的报警</text>
+      <view class="alarm-heading-copy">
+        <text class="alarm-section-title">待处理报警</text>
+        <text class="alarm-section-note">需要你确认的设备报警</text>
+      </view>
+      <view class="profile-entry" bindtap="goProfile" aria-role="button" aria-label="打开个人设置">
+        <image wx:if="{{userInfo.avatarUrl}}" class="profile-avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill" />
+        <app-icon wx:else name="user-round" size="21" label="个人设置" />
+      </view>
+    </view>
+
+    <view class="subscription-bar">
+      <view class="subscription-icon">
+        <app-icon name="bell" size="20" label="报警通知" />
+      </view>
+      <view class="subscription-copy">
+        <text class="subscription-title">下一次报警通知</text>
+        <text class="subscription-hint">每次开启可接收 1 次微信通知</text>
+      </view>
+      <button
+        class="subscription-button {{subscribing || subscriptionAccepted ? 'btn-disabled' : ''}}"
+        bindtap="subscribeAlarmNotifications"
+        disabled="{{subscribing || subscriptionAccepted}}"
+      >{{subscribing ? '开启中…' : subscriptionAccepted ? '已开启 1 次' : '开启下一次'}}</button>
     </view>
 
     <view wx:if="{{loading && alarms.length === 0}}" class="loading-screen compact-loading">
@@ -59,14 +45,16 @@
       <button class="primary-button" bindtap="retryLoad">重新加载</button>
     </view>
 
-    <view wx:elif="{{!loading && alarms.length === 0}}" class="state-panel">
-      <view class="state-icon"><app-icon name="inbox" size="44" muted="{{true}}" label="暂无记录" /></view>
-      <text class="state-title">没有待处理报警</text>
-      <text class="state-hint">当前没有需要你确认的报警</text>
+    <view wx:elif="{{!loading && alarms.length === 0}}" class="state-panel calm-state">
+      <view class="state-icon calm-state-icon">
+        <app-icon name="circle-check-green" size="34" label="当前无待处理报警" />
+      </view>
+      <text class="state-title calm-state-title">当前无待处理报警</text>
+      <text class="state-hint">新的设备报警会显示在这里</text>
     </view>
 
     <view wx:else class="alarm-sheet">
-      <view wx:for="{{alarms}}" wx:key="alarmId" class="alarm-item">
+      <view wx:for="{{alarms}}" wx:key="alarmId" class="alarm-item {{item.status}}">
         <view class="status-mark {{item.status}}"></view>
         <view class="alarm-content">
           <view class="alarm-topline">
@@ -106,8 +94,8 @@
               catchtap="handleAlarm"
               hover-class="action-pressed"
               aria-role="button"
-              aria-label="确认该报警已处理"
-            >{{handlingId === item.alarmId ? '处理中…' : '确认已处理'}}</view>
+              aria-label="将该报警标记为已处理"
+            >{{handlingId === item.alarmId ? '处理中…' : '标记已处理'}}</view>
             <text wx:elif="{{item.status === 'pending'}}" class="action-unavailable">记录不可处理</text>
             <text wx:elif="{{item.displayHandledAt}}" class="handled-time">{{item.displayHandledAt}} 已确认</text>
           </view>
@@ -117,6 +105,11 @@
       <view wx:if="{{loading}}" class="list-footer">正在加载...</view>
       <view wx:elif="{{hasMore}}" class="list-footer more-button" bindtap="loadMore">加载更多记录</view>
       <view wx:else class="list-footer end-text">没有更多记录了</view>
+    </view>
+
+    <view class="notice-bar">
+      <app-icon name="triangle-alert" size="18" label="处理状态说明" />
+      <text>“已处理”仅表示人工确认，不代表设备当前已经恢复正常。</text>
     </view>
 
     <view wx:if="{{!handledExpanded}}" class="handled-disclosure" bindtap="showHandledAlarms" hover-class="action-pressed" aria-role="button">
@@ -149,7 +142,7 @@
       </view>
 
       <view wx:else class="alarm-sheet">
-        <view wx:for="{{handledAlarms}}" wx:key="alarmId" class="alarm-item">
+        <view wx:for="{{handledAlarms}}" wx:key="alarmId" class="alarm-item handled">
           <view class="status-mark handled"></view>
           <view class="alarm-content">
             <view class="alarm-topline">

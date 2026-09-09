@@ -80,42 +80,6 @@
       </white-card>
     </block>
 
-    <block wx:if="{{!isDeviceSetting}}">
-    <white-card title="录音偏好" titleIcon="mic" customClass="setting-module-card">
-      <view class="setting-item">
-        <view class="item-label">报警自动录音</view>
-        <switch class="item-switch" checked="{{autoRecord}}" bindchange="switchAutoRecord" />
-      </view>
-      <view class="setting-item">
-        <view class="item-label">录音质量</view>
-        <picker class="item-picker" mode="selector" range="{{recordQualityList}}" value="{{qualityIndex}}" bindchange="changeRecordQuality">
-          <view>{{recordQualityList[qualityIndex]}}</view>
-        </picker>
-      </view>
-      <view class="setting-item">
-        <view class="item-label">录音自动保存</view>
-        <picker class="item-picker" mode="selector" range="{{saveDayList}}" value="{{dayIndex}}" bindchange="changeSaveDay">
-          <view>{{saveDayList[dayIndex]}}</view>
-        </picker>
-      </view>
-    </white-card>
-
-    <white-card title="提醒偏好" titleIcon="settings-2" customClass="setting-module-card">
-      <view class="setting-item">
-        <view class="item-label">APP报警推送</view>
-        <switch class="item-switch" checked="{{alarmPush}}" bindchange="switchAlarmPush" />
-      </view>
-      <view class="setting-item">
-        <view class="item-label">APP报警铃声</view>
-        <switch class="item-switch" checked="{{alarmSound}}" bindchange="switchAlarmSound" />
-      </view>
-      <view class="setting-item">
-        <view class="item-label">设备断连提醒</view>
-        <switch class="item-switch" checked="{{disconnectWarn}}" bindchange="switchDisconnectWarn" />
-      </view>
-    </white-card>
-    </block>
-
     <view wx:if="{{!isDeviceSetting}}" class="account-actions">
       <button class="logout-btn {{isLoggingOut ? 'btn-disabled' : ''}}" bindtap="logout">
         {{isLoggingOut ? '正在退出…' : '退出登录'}}

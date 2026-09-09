@@ -269,7 +269,7 @@ Page({
 
     wx.toast({ title: '已从本机移除', icon: 'success' });
     setTimeout(() => {
-      wx.navigateTo({ url: '/pages/home/home' });
+      wx.switchTab({ url: '/pages/home/home' });
     }, 800);
   },
 

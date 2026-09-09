@@ -7,7 +7,11 @@ page {
   --text-main: #333333;         /* 主文字色 */
   --text-secondary: #666666;    /* 次要文字色 */
   --bg-main: #FFFFFF;           /* 页面主背景 */
-  --border-color: #EEEEEE;      /* 通用边框色 */
+  --border-color: #E9E9E9;      /* 通用边框色 */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --shadow-card: 0 8rpx 28rpx rgba(48, 38, 28, 0.06);
   
   background-color: var(--bg-main);
   font-size: 28rpx;
@@ -76,7 +80,7 @@ button::after {
   padding: 0 24px;
   height: 38px;
   line-height: 38px;
-  border-radius: 19px;
+  border-radius: 22px;
   background: #FF7A00;
   color: #fff;
   font-size: 14px;
@@ -103,7 +107,7 @@ button::after {
   height: 44px;
   padding: 0 14px;
   border: 1px solid #eee;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
   box-sizing: border-box;
 }
@@ -112,7 +116,7 @@ button::after {
   flex: 1;
   height: 44px;
   line-height: 44px;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 15px;
   text-align: center;
 }

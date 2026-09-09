@@ -12,28 +12,15 @@
   </view>
 
   <block wx:else>
-  <view class="head-card">
-    <view class="head-left">
-      <image class="avatar" src="{{userInfo.avatarUrl || '/images/avatar.png'}}" mode="aspectFill" />
+  <view class="device-toolbar">
+    <view>
+      <text class="device-total">{{devices.length}} 台设备</text>
+      <text class="device-total-hint">已绑定到当前账户</text>
     </view>
-    <view class="head-center">
-      <view class="username">
-        {{ isLogin ? userInfo.nickName || userInfo.userName || '用户' : '未登录用户' }}
-      </view>
-      <view class="sub-text">
-        {{ isLogin ? (userInfo.phone ? userInfo.phone : '尚未绑定手机号') : '登录后可接收报警信息' }}
-      </view>
-    </view>
-    <view class="head-right">
-      <button
-        wx:if="{{!isLogin}}"
-        class="login-btn"
-        bindtap="goLogin"
-      >
-        登录
-      </button>
-      <view wx:else class="login-tag" bindtap="goSetting">已登录 ›</view>
-    </view>
+    <button class="add-device-button" bindtap="goBindDevice">
+      <app-icon name="plus" size="17" />
+      <text>添加设备</text>
+    </button>
   </view>
 
   <view wx:if="{{isLogin && !hasPhone}}" class="phone-banner" bindtap="goBindPhone">
@@ -44,13 +31,7 @@
     </view>
   </view>
 
-  <white-card title="我的设备" customClass="device-card" showRightContent="true">
-    <view slot="rightContent" class="add-btn-wrapper">
-      <view class="add-btn" bindtap="goBindDevice" aria-label="添加设备">
-        <app-icon name="plus" size="18" />
-      </view>
-    </view>
-
+  <white-card customClass="device-card">
     <view wx:for="{{devices}}" wx:key="id" class="device-item" bindtap="goDeviceDetail" data-id="{{item.id}}">
       <view class="device-info">
         <view class="device-name">{{item.name}}</view>
@@ -65,7 +46,7 @@
     <view wx:if="{{!devices || devices.length === 0}}" class="empty-state">
       <view class="empty-icon"><app-icon name="inbox" size="44" muted="{{true}}" label="暂无设备" /></view>
       <text class="empty-text">暂未绑定设备</text>
-      <text class="empty-hint">点击右上角「＋」添加设备</text>
+      <text class="empty-hint">点击上方「添加设备」开始绑定</text>
     </view>
   </white-card>
   </block>

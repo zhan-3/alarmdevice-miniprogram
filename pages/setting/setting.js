@@ -2,19 +2,9 @@ import { loadDeviceData, buildMarkers } from '../../utils/deviceService';
 import http from '../../utils/http';
 import { getStorage, setStorage } from '../../utils/storage';
 import logger from '../../utils/logger';
-const { normalizeSettingIndex } = require('../../utils/localSettings');
-
 Page({
   data: {
     userInfo: {},
-    autoRecord: true,
-    recordQualityList: ['标准质量', '高清质量', '无损质量'],
-    qualityIndex: 1,
-    saveDayList: ['7天', '30天', '90天', '永久保存'],
-    dayIndex: 1,
-    alarmPush: true,
-    alarmSound: true,
-    disconnectWarn: true,
     isDeviceSetting: false,
     deviceLoading: false,
     deviceLoadError: false,
@@ -34,8 +24,6 @@ Page({
     wx.setNavigationBarTitle({ title: isDeviceSetting ? '设备设置' : '个人设置' });
     if (isDeviceSetting) {
       this.loadDevice(options.id);
-    } else {
-      this.loadLocalSetting();
     }
   },
 
@@ -53,6 +41,7 @@ Page({
     if (!avatarUrl) return;
     const userInfo = { ...this.data.userInfo, avatarUrl };
     setStorage('userInfo', userInfo);
+    getApp().globalData.userInfo = userInfo;
     this.setData({ userInfo });
     this.saveUserProfile({ avatarUrl });
   },
@@ -61,6 +50,7 @@ Page({
     const nickName = e.detail.value;
     const userInfo = { ...this.data.userInfo, nickName };
     setStorage('userInfo', userInfo);
+    getApp().globalData.userInfo = userInfo;
     this.setData({ userInfo });
 
     if (this.profileSaveTimer) clearTimeout(this.profileSaveTimer);
@@ -99,68 +89,6 @@ Page({
   retryLoadDevice() {
     const deviceId = this.data.device && this.data.device.id;
     if (deviceId) this.loadDevice(deviceId);
-  },
-
-  loadLocalSetting() {
-    let settings = getStorage('localSettings');
-    if (!settings || typeof settings !== 'object') {
-      // 向后兼容：从旧版独立 key 迁移
-      settings = {
-        autoRecord: wx.getStorageSync('autoRecord'),
-        qualityIndex: normalizeSettingIndex(wx.getStorageSync('recordQualityIndex'), 1, 2),
-        dayIndex: normalizeSettingIndex(wx.getStorageSync('recordSaveDayIndex'), 1, 3),
-        alarmPush: wx.getStorageSync('alarmPush'),
-        alarmSound: wx.getStorageSync('alarmSound'),
-        disconnectWarn: wx.getStorageSync('disconnectWarn')
-      };
-      setStorage('localSettings', settings);
-    }
-
-    this.setData({
-      autoRecord: settings.autoRecord !== false,
-      qualityIndex: normalizeSettingIndex(settings.qualityIndex, 1, 2),
-      dayIndex: normalizeSettingIndex(settings.dayIndex, 1, 3),
-      alarmPush: settings.alarmPush !== false,
-      alarmSound: settings.alarmSound !== false,
-      disconnectWarn: settings.disconnectWarn !== false
-    });
-  },
-
-  updateLocalSettings(patch) {
-    const settings = {
-      autoRecord: this.data.autoRecord,
-      qualityIndex: this.data.qualityIndex,
-      dayIndex: this.data.dayIndex,
-      alarmPush: this.data.alarmPush,
-      alarmSound: this.data.alarmSound,
-      disconnectWarn: this.data.disconnectWarn
-    };
-    this.setData(patch);
-    setStorage('localSettings', { ...settings, ...patch });
-  },
-
-  switchAutoRecord(e) {
-    this.updateLocalSettings({ autoRecord: e.detail.value });
-  },
-
-  changeRecordQuality(e) {
-    this.updateLocalSettings({ qualityIndex: normalizeSettingIndex(e.detail.value, 1, 2) });
-  },
-
-  changeSaveDay(e) {
-    this.updateLocalSettings({ dayIndex: normalizeSettingIndex(e.detail.value, 1, 3) });
-  },
-
-  switchAlarmPush(e) {
-    this.updateLocalSettings({ alarmPush: e.detail.value });
-  },
-
-  switchAlarmSound(e) {
-    this.updateLocalSettings({ alarmSound: e.detail.value });
-  },
-
-  switchDisconnectWarn(e) {
-    this.updateLocalSettings({ disconnectWarn: e.detail.value });
   },
 
   editDeviceName() {
