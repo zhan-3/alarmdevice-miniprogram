@@ -1,7 +1,7 @@
 <view class="login-page">
   <view class="login-header">
     <view class="logo-icon">
-      <app-icon name="bell-white" size="48" label="报警系统" />
+      <app-icon name="bell-dark" size="48" label="报警系统" />
     </view>
     <text class="title">紧急报警系统</text>
     <text class="subtitle" wx:if="{{step === 1}}">微信登录后绑定手机号即可使用</text>

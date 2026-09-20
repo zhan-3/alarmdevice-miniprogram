@@ -1,185 +1,190 @@
-/* 全局变量（继承app.wxss） */
-:root {
-  --orange-primary: #FF7A00;
-  --orange-light: #FFE8D8;
-  --orange-dark: #E86A00;
-  --text-main: #333;
-  --text-secondary: #666;
-  --bg-main: #fff;
-  --border-color: #eee;
-}
-
-/* 原有页面样式（不变） */
 .container {
-  padding: 40px 20px 20px;
-  background: linear-gradient(180deg, #fff 0%, #f6f6f6 100%);
   min-height: 100vh;
+  padding: 34px 20px 24px;
+  box-sizing: border-box;
+  background: var(--bg-wash);
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .header-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: 20px;
-  background: var(--orange-light);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 18px;
+  border: 1px solid var(--orange-border);
+  border-radius: 14px;
+  background: var(--orange-light);
 }
 
 .header-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  color: var(--text-main);
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .header-desc {
+  margin-bottom: 30px;
+  color: var(--text-secondary);
   font-size: 14px;
-  color: #999;
-  margin-bottom: 32px;
 }
 
 .bind-methods {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
-  margin-bottom: 32px;
+  margin-bottom: 30px;
 }
 
 .method-card {
-  flex: 1;
-  background: #fff;
-  border-radius: 16px;
-  padding: 24px 16px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transition: all 0.2s;
+  width: 100%;
+  min-height: 92px;
+  padding: 18px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .method-card:active {
-  transform: scale(0.98);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  transform: scale(0.985);
+  opacity: 0.9;
 }
 
 .method-card.scan {
-  background: linear-gradient(135deg, #FF7A00 0%, #FF9933 100%);
-  color: #fff;
-}
-
-.method-card.scan .method-icon,
-.method-card.scan .method-title,
-.method-card.scan .method-desc {
-  color: #fff;
-}
-
-.method-card.scan .method-icon {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-.method-card.manual {
-  background: #fff;
+  min-height: 108px;
+  border-color: var(--orange-primary);
+  background: linear-gradient(135deg, var(--orange-primary) 0%, var(--orange-highlight) 100%);
+  color: var(--text-main);
+  box-shadow: 0 10rpx 24rpx rgba(201, 79, 0, 0.2);
 }
 
 .method-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 12px;
-}
-
-.method-card.manual .method-icon {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  margin-right: 15px;
+  border-radius: 12px;
   background: var(--orange-light);
 }
 
+.method-card.scan .method-icon {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 0 0 1rpx rgba(31, 41, 51, 0.16);
+}
+
+.method-copy {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
 .method-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 3px;
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .method-desc {
-  font-size: 12px;
-  opacity: 0.8;
-  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.method-card.scan .method-title,
+.method-card.scan .method-desc {
+  color: var(--text-main);
+}
+
+.method-card.scan .method-desc {
+  opacity: 0.82;
 }
 
 .tips-section {
   width: 100%;
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  padding: 20px 2px 0;
+  box-sizing: border-box;
+  border-top: 1px solid var(--border-color);
 }
 
 .tips-title {
+  margin-bottom: 10px;
+  color: var(--text-main);
   font-size: 14px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 12px;
+  font-weight: 700;
 }
 
 .tips-item {
+  color: var(--text-secondary);
   font-size: 13px;
-  color: #666;
-  line-height: 1.8;
+  line-height: 1.9;
 }
 
-/* 弹窗样式 */
 .modal-mask {
-  animation: maskFadeIn 0.2s ease;
+  animation: maskFadeIn 0.18s ease-out;
 }
 
 .modal-container {
   position: fixed;
+  z-index: 999;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
-  width: 85%;
-  max-width: 320px;
-  background: var(--bg-main);
-  border-radius: 16px;
+  width: 86%;
+  max-width: 340px;
   overflow: hidden;
-  z-index: 999;
-  animation: modalPopIn 0.2s ease;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 24rpx 70rpx rgba(31, 41, 51, 0.22);
+  transform: translate(-50%, -50%);
+  animation: modalPopIn 0.2s ease-out;
 }
 
-/* 弹窗头部（标题+关闭按钮） */
 .modal-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 66px;
+  padding: 10px 14px 10px 20px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title {
-  font-size: 17px;
-  font-weight: 600;
   color: var(--text-main);
+  font-size: 17px;
+  font-weight: 700;
 }
 
 .modal-close {
-  font-size: 20px;
-  color: var(--text-secondary);
-  width: 30px;
-  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--text-secondary);
 }
 
-/* 弹窗主体（输入框） */
 .modal-body {
-  padding: 20px;
+  padding: 22px 20px;
+}
+
+.modal-input {
+  min-height: 48px;
+  color: var(--text-main);
+  background: #FFFFFF;
 }
 
 .modal-input:focus {
@@ -187,45 +192,47 @@
   outline: none;
 }
 
-/* 弹窗底部（按钮组） */
+.modal-input.input-error {
+  border-color: var(--status-alarm-color);
+}
+
+.input-error-tip {
+  display: block;
+  margin-top: 6px;
+  color: var(--status-alarm-color);
+  font-size: 12px;
+}
+
 .modal-footer {
-  padding: 12px 20px;
-  border-top: 1px solid var(--border-color);
   display: flex;
   gap: 12px;
+  padding: 14px 20px 20px;
+}
+
+.modal-btn {
+  min-height: 44px;
+  border-radius: 10px;
 }
 
 .modal-btn.confirm:active {
   background: var(--orange-dark);
 }
 
-.modal-input.input-error {
-  border-color: #ff4d4f;
-}
-
-.input-error-tip {
-  font-size: 12px;
-  color: #ff4d4f;
-  margin-top: 4px;
-  display: block;
-}
-
 .modal-btn.btn-disabled {
-  background: #ccc !important;
+  background: #C5C9CE !important;
 }
 
-/* 动画 */
 @keyframes maskFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
 @keyframes modalPopIn {
-  from { 
+  from {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.95);
+    transform: translate(-50%, -48%) scale(0.98);
   }
-  to { 
+  to {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }

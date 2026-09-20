@@ -1,29 +1,33 @@
 /* app.wxss 全局样式 - 简化兼容版 */
 /* 橙色系主色调（直接定义，避免小程序兼容问题） */
 page {
-  --orange-primary: #FF7A00;    /* 主橙色（按钮/导航栏） */
-  --orange-light: #FFE8D8;      /* 浅橙色（背景/高亮） */
-  --orange-dark: #E86A00;       /* 深橙色（点击态/边框） */
-  --text-main: #333333;         /* 主文字色 */
-  --text-secondary: #666666;    /* 次要文字色 */
-  --bg-main: #FFFFFF;           /* 页面主背景 */
-  --border-color: #E9E9E9;      /* 通用边框色 */
+  --orange-primary: #F05A28;
+  --orange-highlight: #F4774F;
+  --orange-action: #C94F00;
+  --orange-light: #FFF1EB;
+  --orange-border: #E3A48D;
+  --orange-dark: #963B16;
+  --text-main: #17212B;
+  --text-secondary: #59636F;
+  --bg-main: #F5F6F7;
+  --bg-wash: linear-gradient(180deg, #FFF4EF 0%, #F8F4F1 180px, #F5F6F7 380px);
+  --surface: #FFFFFF;
+  --border-color: #E1E5E9;
   --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 20px;
-  --shadow-card: 0 8rpx 28rpx rgba(48, 38, 28, 0.06);
-  
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --shadow-card: none;
+
   background-color: var(--bg-main);
   font-size: 28rpx;
   color: var(--text-main);
   line-height: 1.6;
-  /* 状态标签配色 */
-  --status-alarm-bg: #fff1f0;
-  --status-alarm-color: #f53f3f;
-  --status-normal-bg: #f6ffed;
-  --status-normal-color: #52c41a;
-  --status-offline-bg: #f5f5f5;
-  --status-offline-color: #999;
+  --status-alarm-bg: #FFF0EF;
+  --status-alarm-color: #B42318;
+  --status-normal-bg: #EDF8F0;
+  --status-normal-color: #237A3B;
+  --status-offline-bg: #EEF0F2;
+  --status-offline-color: #5F6873;
 }
 
 /* 全局重置button默认样式 */
@@ -48,8 +52,8 @@ button::after {
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #f0f0f0;
-  border-top-color: #FF7A00;
+  border: 3px solid #e5e8eb;
+  border-top-color: var(--orange-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -60,7 +64,7 @@ button::after {
 
 .loading-text {
   font-size: 14px;
-  color: #999;
+  color: var(--text-secondary);
   margin-top: 12px;
 }
 
@@ -78,10 +82,10 @@ button::after {
 .retry-btn {
   margin-top: 18px;
   padding: 0 24px;
-  height: 38px;
-  line-height: 38px;
-  border-radius: 22px;
-  background: #FF7A00;
+  min-height: 44px;
+  line-height: 44px;
+  border-radius: 12px;
+  background: var(--orange-action);
   color: #fff;
   font-size: 14px;
 }
@@ -128,6 +132,6 @@ button::after {
 }
 
 .modal-btn.confirm {
-  background: #FF7A00;
+  background: var(--orange-action);
   color: #fff;
 }

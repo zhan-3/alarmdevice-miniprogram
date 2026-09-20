@@ -1,6 +1,6 @@
 .container {
   padding: 20px 15px 15px;
-  background: #f5f4f2;
+  background: var(--bg-wash);
   min-height: 100vh;
 }
 
@@ -26,8 +26,8 @@
 
 .device-total-hint {
   margin-top: 3px;
-  color: #777;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .add-device-button {
@@ -39,9 +39,9 @@
   min-height: 44px;
   margin: 0;
   padding: 0 16px;
-  border: 1px solid #f2b16f;
-  border-radius: 22px;
-  background: #fff0e5;
+  border: 1px solid var(--orange-border);
+  border-radius: 12px;
+  background: var(--orange-light);
   color: var(--orange-dark);
   font-size: 13px;
   font-weight: 600;
@@ -66,6 +66,10 @@
 
 .device-item:last-child { border-bottom: none; }
 
+.device-item:active {
+  background: #F7F8F9;
+}
+
 .device-info { 
   flex: 1;
   min-width: 0;
@@ -79,15 +83,15 @@
 }
 
 .device-name {
-  color: #333;
-  font-size: 14px;
-  font-weight: 500;
+  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .device-sn {
-  margin-top: 2px;
-  color: #777;
-  font-size: 11px;
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .device-status-group {
@@ -98,10 +102,10 @@
 }
 
 .device-status {
+  padding: 4px 10px;
+  border-radius: 8px;
   font-size: 12px;
-  padding: 4px 11px;
-  border-radius: 14px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .device-status.alarm {
@@ -148,8 +152,8 @@
 }
 
 .phone-banner {
-  background: #fff8e1;
-  border: 1px solid #ffe082;
+  background: #FFF7E8;
+  border: 1px solid #EACB91;
   border-radius: var(--radius-md);
   padding: 13px 16px;
   margin-bottom: 16px;
@@ -174,6 +178,6 @@
 
 .phone-banner-link {
   font-weight: 600;
-  color: #e86a00;
+  color: var(--orange-dark);
   flex-shrink: 0;
 }

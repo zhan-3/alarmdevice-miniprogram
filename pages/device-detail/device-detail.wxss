@@ -1,6 +1,6 @@
 .container {
   padding: 0;
-  background: #f5f4f2;
+  background: var(--bg-wash);
   min-height: 100vh;
 }
 
@@ -110,7 +110,7 @@
 }
 
 .quick-action:active {
-  background: #ffe6cc;
+  background: #FFE0D4;
 }
 
 .quick-action .action-img {

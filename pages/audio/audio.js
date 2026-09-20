@@ -9,6 +9,24 @@ const {
   toggleAudioCollection
 } = require('../../utils/audioState')
 
+const WAVEFORM_BAR_COUNT = 44
+
+function createWaveformBars(seedValue = 'alarm-audio') {
+  const seed = String(seedValue)
+  let state = 2166136261
+  for (let index = 0; index < seed.length; index++) {
+    state ^= seed.charCodeAt(index)
+    state = Math.imul(state, 16777619) >>> 0
+  }
+
+  return Array.from({ length: WAVEFORM_BAR_COUNT }, (_, index) => {
+    state = Math.imul(state ^ (index + 1), 16777619) >>> 0
+    const noise = (state >>> 24) / 255
+    const envelope = 0.72 + 0.28 * Math.sin((index / (WAVEFORM_BAR_COUNT - 1)) * Math.PI)
+    return Math.round((24 + noise * 64) * envelope)
+  })
+}
+
 Page({
   data: {
     currentAudio: null,
@@ -27,7 +45,6 @@ Page({
     progressTimer: null,
     formatCurrent: '00:00',
     formatTotal: '01:00',
-    waveformData: [],
     waveformBars: [],
     sortType: 'desc',
     filterType: 'all',
@@ -58,12 +75,8 @@ Page({
     }
   },
 
-  initWaveform() {
-    const bars = [];
-    for (let i = 0; i < 25; i++) {
-      bars.push(Math.random() * 60 + 20);
-    }
-    this.setData({ waveformBars: bars });
+  initWaveform(seedValue) {
+    this.setData({ waveformBars: createWaveformBars(seedValue) });
   },
 
   onUnload() {
@@ -75,15 +88,6 @@ Page({
       try { this.data.audioManager.destroy(); } catch (e) { /* noop */ }
       this.setData({ audioManager: null });
     }
-  },
-
-  
-  generateWaveform() {
-    const waveform = [];
-    for (let i = 0; i < 50; i++) {
-      waveform.push(Math.random() * 60 + 20);
-    }
-    this.setData({ waveformData: waveform });
   },
 
   formatTime(seconds) {
@@ -345,7 +349,8 @@ Page({
       isPlaying: false,
       progress: 0,
       currentTime: '00:00',
-      currentPlayId: audio.id
+      currentPlayId: audio.id,
+      waveformBars: createWaveformBars(audio.url || audio.name || audio.id)
     });
 
     this.updateFilteredList();

@@ -1,19 +1,19 @@
 .audio-container {
   min-height: 100vh;
-  background: #f6f6f6;
+  background: var(--bg-wash);
 }
 
 /* 播放器区域 */
 .player-section {
   padding: 15px;
-  background: linear-gradient(135deg, #FF7A00 0%, #FF9933 100%);
+  background: linear-gradient(135deg, var(--orange-primary) 0%, var(--orange-highlight) 100%);
 }
 
 .player-card {
   background: #fff;
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 4px 20px rgba(255, 122, 0, 0.2);
+  box-shadow: 0 4px 20px rgba(201, 79, 0, 0.18);
 }
 
 .player-header {
@@ -55,8 +55,8 @@
 }
 
 .player-status.emergency {
-  background: #FFF0E8;
-  color: #FF7A00;
+  background: var(--status-alarm-bg);
+  color: var(--status-alarm-color);
 }
 
 .player-status.normal {
@@ -64,45 +64,107 @@
   color: #52c41a;
 }
 
-/* 波形图 */
-.waveform-wrap {
-  height: 40px;
+/* 音频时间轴波形 */
+.waveform-meta {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-  background: #fafafa;
-  border-radius: 8px;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.waveform-state {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.waveform-state.is-playing {
+  color: var(--orange-dark);
+}
+
+.waveform-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 64px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #F7F8F9;
+}
+
+.waveform-axis {
+  position: absolute;
+  right: 10px;
+  left: 10px;
+  top: 50%;
+  height: 1rpx;
+  background: #D9DDE1;
 }
 
 .waveform {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
+  gap: 2px;
+  width: 100%;
   height: 100%;
 }
 
 .wave-bar {
-  height: var(--bar-height); 
+  flex: 1;
+  min-width: 0;
+  border-radius: 2px;
+  background: #C9CED4;
+  transform-origin: center;
+  transition: background-color 0.16s ease-out, opacity 0.16s ease-out;
 }
 
-.waveform.active .wave-bar {
+.wave-bar.played {
+  background: var(--orange-action);
+}
+
+.waveform-playhead {
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
   background: var(--orange-primary);
-  animation: wave 0.8s ease-in-out infinite;
+  box-shadow: 2px 0 8px rgba(240, 90, 40, 0.2);
+  transform: translateX(-1px);
+  pointer-events: none;
 }
 
-.waveform.active .wave-bar:nth-child(odd) {
-  animation-delay: 0.1s;
+.waveform-playhead-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #FFFFFF;
+  border-radius: 50%;
+  background: var(--orange-primary);
+  box-shadow: 0 2px 6px rgba(150, 59, 22, 0.28);
+  transform: translate(-50%, -50%);
 }
 
-.waveform.active .wave-bar:nth-child(3n) {
-  animation-delay: 0.2s;
+.waveform-playhead.active .waveform-playhead-dot {
+  animation: playheadPulse 1.2s ease-in-out infinite;
 }
 
-@keyframes wave {
-  0%, 100% { transform: scaleY(0.5); }
-  50% { transform: scaleY(1); }
+@keyframes playheadPulse {
+  0%, 100% {
+    box-shadow: 0 2px 6px rgba(150, 59, 22, 0.28);
+  }
+  50% {
+    box-shadow: 0 2px 6px rgba(150, 59, 22, 0.28), 0 0 0 4px rgba(240, 90, 40, 0.12);
+  }
 }
 
 /* 播放控制 */
@@ -153,7 +215,7 @@
 .control-btn.play-btn {
   width: 56px;
   height: 56px;
-  background: var(--orange-primary);
+  background: var(--orange-action);
   border-radius: 50%;
   padding: 0;
 }
@@ -190,7 +252,7 @@
 }
 
 .speed-opt.active {
-  background: var(--orange-primary);
+  background: var(--orange-action);
   color: #fff;
 }
 
@@ -315,8 +377,8 @@
 }
 
 .audio-status.emergency {
-  background: #FFF0E8;
-  color: #FF7A00;
+  background: var(--status-alarm-bg);
+  color: var(--status-alarm-color);
 }
 
 .audio-status.normal {

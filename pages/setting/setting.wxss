@@ -1,6 +1,6 @@
 /* 全局样式重置 - 统一橙色主题 */
 page {
-  background-color: #f5f7fa;
+  background: var(--bg-wash);
   font-size: 28rpx;
   color: #333;
 }
@@ -88,7 +88,7 @@ page {
 }
 /* 覆盖white-card组件的标题样式，统一橙色 */
 .setting-module-card .header-title {
-  color: #FF7A00 !important;
+  color: var(--orange-dark) !important;
   font-size: 32rpx !important;
   font-weight: 600 !important;
 }
@@ -217,7 +217,7 @@ page {
 .location-btn {
   width: 100%;
   height: 80rpx;
-  background: var(--orange-primary);
+  background: var(--orange-action);
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -264,7 +264,7 @@ page {
 
 .edit-icon {
   font-size: 24rpx;
-  color: #FF7A00;
+  color: var(--orange-primary);
 }
 
 .info-label {
@@ -298,8 +298,8 @@ page {
 }
 
 .status-badge.alarm {
-  background: #fff1e6;
-  color: #FF7A00;
+  background: var(--status-alarm-bg);
+  color: var(--status-alarm-color);
 }
 
 .status-badge.offline {

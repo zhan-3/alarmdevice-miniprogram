@@ -1,5 +1,4 @@
 <view class="container">
-  <!-- 原有页面内容（不变） -->
   <view class="header-icon">
     <app-icon name="smartphone" size="40" label="绑定设备" />
   </view>
@@ -7,20 +6,24 @@
   <view class="header-desc">将设备绑定到您的账户</view>
 
   <view class="bind-methods">
-    <view class="method-card scan" bindtap="scanBindDevice">
+    <view class="method-card scan" bindtap="scanBindDevice" aria-role="button" aria-label="扫描设备二维码绑定">
       <view class="method-icon">
-        <app-icon name="scan-line-white" size="30" label="扫码绑定" />
+        <app-icon name="scan-line-dark" size="30" label="扫码绑定" />
       </view>
-      <view class="method-title">扫码绑定</view>
-      <view class="method-desc">扫描设备上的二维码</view>
+      <view class="method-copy">
+        <view class="method-title">扫码绑定</view>
+        <view class="method-desc">扫描设备机身上的二维码</view>
+      </view>
     </view>
 
-    <view class="method-card manual" bindtap="openManualBind">
+    <view class="method-card manual" bindtap="openManualBind" aria-role="button" aria-label="手动输入设备编号">
       <view class="method-icon">
-        <app-icon name="pencil" size="28" label="手动输入" />
+        <app-icon name="pencil" size="26" label="手动输入" />
       </view>
-      <view class="method-title">手动输入</view>
-      <view class="method-desc">输入设备SN码绑定</view>
+      <view class="method-copy">
+        <view class="method-title">手动输入</view>
+        <view class="method-desc">二维码不可用时输入设备编号</view>
+      </view>
     </view>
   </view>
 
@@ -31,13 +34,13 @@
     <view class="tips-item">3. 绑定成功后即可使用设备功能</view>
   </view>
 
-  <!-- 手动绑定弹窗（核心修改） -->
+  <!-- 手动绑定弹窗 -->
   <view class="modal-mask" wx:if="{{showManualBind}}" bindtap="closeManualBind"></view>
   <view class="modal-container" wx:if="{{showManualBind}}" catchtap>
     <!-- 弹窗标题 -->
     <view class="modal-header">
       <view class="modal-title">输入设备SN码</view>
-      <view class="modal-close" bindtap="closeManualBind" aria-label="关闭">
+      <view class="modal-close" bindtap="closeManualBind" aria-role="button" aria-label="关闭">
         <app-icon name="x-gray" size="20" />
       </view>
     </view>
@@ -46,12 +49,12 @@
       <input
         class="modal-input {{snError ? 'input-error' : ''}}"
         type="text"
-        placeholder="请输入设备SN码（大写字母+数字，20位以内）"
+        placeholder="请输入设备SN码（字母、数字、-、_，32位以内）"
         bindinput="onInputSN"
         value="{{inputSN}}"
-        maxlength="20"
+        maxlength="32"
       />
-      <text wx:if="{{snError}}" class="input-error-tip">SN码只能包含大写字母和数字</text>
+      <text wx:if="{{snError}}" class="input-error-tip">SN码只能包含字母、数字、短横线和下划线</text>
     </view>
     <!-- 按钮组 -->
     <view class="modal-footer">

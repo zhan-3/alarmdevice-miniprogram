@@ -10,7 +10,7 @@
   ],
   "window": {
     "backgroundTextStyle": "dark",
-    "navigationBarBackgroundColor": "#C94F00",
+    "navigationBarBackgroundColor": "#F05A28",
     "navigationBarTitleText": "报警系统",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#FFFFFF",
@@ -18,7 +18,7 @@
   },
   "tabBar": {
     "color": "#8A8A8A",
-    "selectedColor": "#FF7A00",
+    "selectedColor": "#F05A28",
     "backgroundColor": "#FFFFFF",
     "borderStyle": "white",
     "list": [

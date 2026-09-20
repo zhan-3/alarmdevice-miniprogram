@@ -86,6 +86,8 @@
               data-lng="{{item.gpsLng}}"
               data-sn="{{item.deviceSn}}"
               bindtap="openAlarmLocation"
+              aria-role="button"
+              aria-label="查看该报警的位置"
             >查看位置</view>
             <view
               wx:if="{{item.status === 'pending' && item.canHandle}}"
@@ -103,7 +105,7 @@
       </view>
 
       <view wx:if="{{loading}}" class="list-footer">正在加载...</view>
-      <view wx:elif="{{hasMore}}" class="list-footer more-button" bindtap="loadMore">加载更多记录</view>
+      <view wx:elif="{{hasMore}}" class="list-footer more-button" bindtap="loadMore" aria-role="button">加载更多记录</view>
       <view wx:else class="list-footer end-text">没有更多记录了</view>
     </view>
 
@@ -112,7 +114,7 @@
       <text>“已处理”仅表示人工确认，不代表设备当前已经恢复正常。</text>
     </view>
 
-    <view wx:if="{{!handledExpanded}}" class="handled-disclosure" bindtap="showHandledAlarms" hover-class="action-pressed" aria-role="button">
+    <view wx:if="{{!handledExpanded}}" class="handled-disclosure" bindtap="showHandledAlarms" hover-class="action-pressed" aria-role="button" aria-label="查看已处理的报警记录">
       <view>
         <text class="handled-disclosure-title">查看已处理记录</text>
         <text class="handled-disclosure-hint">需要时再加载历史记录</text>
@@ -171,13 +173,15 @@
                 data-lng="{{item.gpsLng}}"
                 data-sn="{{item.deviceSn}}"
                 bindtap="openAlarmLocation"
+                aria-role="button"
+                aria-label="查看该报警的位置"
               >查看位置</view>
               <text wx:if="{{item.displayHandledAt}}" class="handled-time">{{item.displayHandledAt}} 已确认</text>
             </view>
           </view>
         </view>
         <view wx:if="{{handledLoading}}" class="list-footer">正在加载...</view>
-        <view wx:elif="{{handledHasMore}}" class="list-footer more-button" bindtap="loadMoreHandled">加载更多已处理记录</view>
+        <view wx:elif="{{handledHasMore}}" class="list-footer more-button" bindtap="loadMoreHandled" aria-role="button">加载更多已处理记录</view>
         <view wx:else class="list-footer end-text">没有更多已处理记录了</view>
       </view>
     </block>

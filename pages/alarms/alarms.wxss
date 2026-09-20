@@ -2,7 +2,7 @@
   min-height: 100vh;
   box-sizing: border-box;
   padding: 20px 15px 30px;
-  background: linear-gradient(180deg, #f1eee9 0, #f7f6f4 280px, #f7f6f4 100%);
+  background: var(--bg-wash);
 }
 
 .profile-entry {
@@ -15,10 +15,10 @@
   height: 44px;
   margin-left: 12px;
   padding: 3px;
-  border: 1px solid #f0d8c2;
+  border: 1px solid var(--border-color);
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 4rpx 14rpx rgba(48, 38, 28, 0.08);
+  background: var(--surface);
+  box-shadow: none;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -55,12 +55,12 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 14px;
-  padding: 13px 14px;
-  border: 1rpx solid #ffc995;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1rpx solid var(--orange-border);
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #ffe3c8 0%, #fff4e8 62%, #fff9f3 100%);
-  box-shadow: 0 10rpx 28rpx rgba(184, 79, 0, 0.11);
+  background: linear-gradient(120deg, #FFF1EB 0%, #FFF8F5 100%);
+  box-shadow: 0 8rpx 22rpx rgba(201, 79, 0, 0.08);
 }
 
 .subscription-icon {
@@ -70,9 +70,9 @@
   flex-shrink: 0;
   width: 40px;
   height: 40px;
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 4rpx 12rpx rgba(184, 79, 0, 0.08), inset 0 0 0 1rpx rgba(232, 106, 0, 0.1);
+  border-radius: 10px;
+  background: #FFFFFF;
+  box-shadow: inset 0 0 0 1rpx var(--orange-border);
 }
 
 .subscription-copy {
@@ -93,8 +93,8 @@
 
 .subscription-hint {
   margin-top: 3px;
-  color: #666;
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -104,9 +104,9 @@
   height: 40px;
   margin: 0;
   padding: 0 14px;
-  border: 1px solid #f2b16f;
-  border-radius: 20px;
-  background: #fff8ef;
+  border: 1px solid var(--orange-border);
+  border-radius: 10px;
+  background: #FFFFFF;
   color: var(--orange-dark);
   font-size: 12px;
   font-weight: 600;
@@ -207,18 +207,19 @@
   align-items: stretch;
   margin-bottom: 12px;
   padding: 18px 17px;
-  border: 1rpx solid #eee7e1;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 8rpx 24rpx rgba(48, 38, 28, 0.055);
+  border: 1rpx solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: #FFFFFF;
+  box-shadow: var(--shadow-card);
 }
 
 .alarm-item.pending {
-  background: linear-gradient(105deg, #fff3f2 0%, #ffffff 28%);
+  border-color: #E7B6B2;
+  background: linear-gradient(105deg, #FFF2EF 0%, #FFFFFF 32%);
 }
 
 .alarm-item.handled {
-  background: linear-gradient(105deg, #f4faef 0%, #ffffff 28%);
+  border-color: #CFE2D4;
 }
 
 .status-mark {
@@ -271,16 +272,16 @@
 }
 
 .device-sn {
-  margin-top: 1px;
-  color: #777;
-  font-size: 11px;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .alarm-status {
   flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 8px;
-  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 12px;
 }
 
 .alarm-status.pending {
@@ -295,9 +296,9 @@
 
 .alarm-time {
   display: block;
-  margin-top: 5px;
-  color: #777;
-  font-size: 12px;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .alarm-details {
@@ -305,8 +306,8 @@
   flex-wrap: wrap;
   gap: 6px 16px;
   margin-top: 11px;
-  color: #777;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .detail-item {
@@ -323,17 +324,20 @@
 }
 
 .location-action {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--orange-dark);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .handle-button,
 .primary-button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 18px;
-  border-radius: 20px;
-  background: var(--orange-primary);
+  border-radius: 10px;
+  background: var(--orange-action);
   color: #fff;
   font-size: 13px;
   line-height: 40px;
@@ -369,36 +373,11 @@
 }
 
 .calm-state {
-  position: relative;
   min-height: 210px;
   justify-content: center;
-  border-color: #dcebd3;
-  background: linear-gradient(145deg, #f1f9eb 0%, #fbfdf9 56%, #ffffff 100%);
-  box-shadow: 0 16rpx 40rpx rgba(55, 92, 37, 0.09);
-}
-
-.calm-state::before,
-.calm-state::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.calm-state::before {
-  top: -78px;
-  right: -54px;
-  width: 180px;
-  height: 180px;
-  background: rgba(82, 196, 26, 0.07);
-}
-
-.calm-state::after {
-  bottom: -64px;
-  left: -42px;
-  width: 132px;
-  height: 132px;
-  border: 18px solid rgba(82, 196, 26, 0.045);
+  border-color: #CFE2D4;
+  background: linear-gradient(145deg, #F2F8F3 0%, #FFFFFF 100%);
+  box-shadow: 0 8rpx 22rpx rgba(35, 122, 59, 0.07);
 }
 
 .state-icon {
@@ -441,8 +420,8 @@
 
 .state-hint {
   margin-top: 5px;
-  color: #888;
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .calm-state .state-hint {

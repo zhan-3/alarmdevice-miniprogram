@@ -34,9 +34,9 @@
   border: 1rpx solid #eeeeee;
 }
 
-/* 橙色按钮样式（原有orange-button效果） */
+/* 主操作按钮 */
 .orange-btn {
-  background-color: #FF7A00;
+  background-color: var(--orange-action);
   color: #ffffff;
 }
 
@@ -51,7 +51,7 @@
   background-color: #e5e5e5;
 }
 .orange-btn:active:not(.disabled) {
-  background-color: #E86A00;
+  background-color: var(--orange-dark);
 }
 .normal-btn.white:active:not(.disabled) {
   background-color: #f0f0f0;
