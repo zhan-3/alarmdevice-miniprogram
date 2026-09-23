@@ -9,7 +9,7 @@ function loadSettingPage({ http, logger, wx, app }) {
   const source = fs.readFileSync(pagePath, 'utf8')
     .replace("import { loadDeviceData, buildMarkers } from '../../utils/deviceService';", 'const { loadDeviceData, buildMarkers } = globalThis.__deps;')
     .replace("import http from '../../utils/http';", 'const http = globalThis.__deps.http;')
-    .replace("import { getStorage, setStorage } from '../../utils/storage';", 'const { getStorage, setStorage } = globalThis.__deps;')
+    .replace("import { getStorage } from '../../utils/storage';", 'const { getStorage } = globalThis.__deps;')
     .replace("import logger from '../../utils/logger';", 'const logger = globalThis.__deps.logger;');
 
   let definition;
@@ -19,8 +19,7 @@ function loadSettingPage({ http, logger, wx, app }) {
       logger,
       loadDeviceData: async () => null,
       buildMarkers: () => [],
-      getStorage: () => null,
-      setStorage: () => {}
+      getStorage: () => null
     },
     Page(value) { definition = value; },
     wx,

@@ -1,20 +1,11 @@
 <view class="setting-container">
   <scroll-view class="setting-scroll" scroll-y>
-    <!-- 用户资料卡片（仅主页进入时展示） -->
-    <white-card wx:if="{{!isDeviceSetting}}" title="个人资料" titleIcon="user-round" customClass="setting-module-card">
-      <view class="profile-card">
-        <view class="profile-avatar-row">
-          <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-            <image class="profile-avatar" src="{{userInfo.avatarUrl || '/images/avatar.png'}}" mode="aspectFill" />
-          </button>
-          <view class="profile-info">
-            <input class="profile-nickname" type="nickname" placeholder="点击填写昵称" value="{{userInfo.nickName}}" bindinput="onNicknameInput" maxlength="20" />
-            <view class="profile-phone">
-              <text wx:if="{{userInfo.phone}}">{{userInfo.phone}}</text>
-              <text wx:else class="phone-unbind">未绑定手机号</text>
-            </view>
-          </view>
-        </view>
+    <!-- 账号信息（仅主页进入时展示） -->
+    <white-card wx:if="{{!isDeviceSetting}}" title="账号信息" titleIcon="user-round" customClass="setting-module-card">
+      <view class="account-summary">
+        <text class="account-label">绑定手机号</text>
+        <text wx:if="{{userInfo.phone}}" class="account-value">{{userInfo.phone}}</text>
+        <text wx:else class="phone-unbind">未绑定手机号</text>
       </view>
     </white-card>
 

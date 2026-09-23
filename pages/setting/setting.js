@@ -1,6 +1,6 @@
 import { loadDeviceData, buildMarkers } from '../../utils/deviceService';
 import http from '../../utils/http';
-import { getStorage, setStorage } from '../../utils/storage';
+import { getStorage } from '../../utils/storage';
 import logger from '../../utils/logger';
 Page({
   data: {
@@ -30,42 +30,6 @@ Page({
   loadUserInfo() {
     const userInfo = getStorage('userInfo') || {};
     this.setData({ userInfo });
-  },
-
-  onUnload() {
-    if (this.profileSaveTimer) clearTimeout(this.profileSaveTimer);
-  },
-
-  onChooseAvatar(e) {
-    const avatarUrl = e.detail.avatarUrl;
-    if (!avatarUrl) return;
-    const userInfo = { ...this.data.userInfo, avatarUrl };
-    setStorage('userInfo', userInfo);
-    getApp().globalData.userInfo = userInfo;
-    this.setData({ userInfo });
-    this.saveUserProfile({ avatarUrl });
-  },
-
-  onNicknameInput(e) {
-    const nickName = e.detail.value;
-    const userInfo = { ...this.data.userInfo, nickName };
-    setStorage('userInfo', userInfo);
-    getApp().globalData.userInfo = userInfo;
-    this.setData({ userInfo });
-
-    if (this.profileSaveTimer) clearTimeout(this.profileSaveTimer);
-    this.profileSaveTimer = setTimeout(() => {
-      this.saveUserProfile({ nickName: nickName.trim() });
-      this.profileSaveTimer = null;
-    }, 500);
-  },
-
-  async saveUserProfile(fields) {
-    try {
-      await http.post('/user/getMessage', fields, { credentialScope: 'login' })
-    } catch (err) {
-      logger.warn('保存用户信息失败，已缓存本地', { error: err })
-    }
   },
 
   async loadDevice(deviceId) {
