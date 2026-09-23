@@ -4,9 +4,9 @@ const { envVersion } = miniProgram
 // 微信开发者工具中的开发版可以访问本机；真机调试时请改为同一局域网内可访问的地址。
 // 体验版和正式版必须使用已在微信公众平台登记的 HTTPS 合法域名。
 const API_BASE_URLS = Object.freeze({
-  develop: 'http://47.104.183.151',
-  trial: '',
-  release: ''
+  develop: 'https://bridgemonitor.xyz',
+  trial: 'https://bridgemonitor.xyz',
+  release: 'https://bridgemonitor.xyz'
 })
 
 function resolveBaseURL(version) {
