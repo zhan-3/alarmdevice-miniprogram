@@ -1,0 +1,27 @@
+# 将本文件中的 location 块合并到 bridgemonitor.xyz 现有的 HTTPS server {} 中。
+# 精确匹配优先于现有的 location / API 反向代理，因此不会改变 /user、/device 等接口。
+# 部署前把 server/public 下的文件复制到 /var/www/bridgemonitor-site/。
+
+location = / {
+    root /var/www/bridgemonitor-site;
+    try_files /index.html =404;
+}
+
+location = /privacy.html {
+    root /var/www/bridgemonitor-site;
+    try_files /privacy.html =404;
+}
+
+location = /styles.css {
+    root /var/www/bridgemonitor-site;
+    try_files /styles.css =404;
+    expires 1h;
+    add_header Cache-Control "public, max-age=3600";
+}
+
+location = /favicon.svg {
+    root /var/www/bridgemonitor-site;
+    try_files /favicon.svg =404;
+    expires 7d;
+    add_header Cache-Control "public, max-age=604800";
+}

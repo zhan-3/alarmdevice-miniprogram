@@ -5,8 +5,15 @@ const path = require('path')
 const qrcode = require('qrcode')
 const app = express()
 
+app.disable('x-powered-by')
 app.use(cors())
 app.use(express.json())
+
+const publicDir = path.join(__dirname, 'public')
+app.use(express.static(publicDir, {
+  extensions: ['html'],
+  maxAge: '1h'
+}))
 
 const audioDir = path.join(__dirname, 'audio')
 if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir)
@@ -30,7 +37,7 @@ app.get('/audio/generate', (req, res) => {
   res.json({ code: 1, data: urls })
 })
 
-const PORT = 8080
+const PORT = Number(process.env.PORT) || 8080
 let requestLog = []
 
 function log(req, res, code) {
