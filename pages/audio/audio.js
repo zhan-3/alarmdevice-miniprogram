@@ -124,7 +124,10 @@ Page({
       getDuration:     () => innerAudio.duration || 0,
       getCurrentTime:  () => innerAudio.currentTime || 0,
       destroy:         () => innerAudio.destroy(),
-      load:            (url) => { innerAudio.src = url; },
+      load:            (url) => {
+        if (innerAudio.src === url) return;
+        innerAudio.src = url;
+      },
       on: (evt, cb) => {
         const method = 'on' + capitalize(evt);
         if (typeof innerAudio[method] === 'function') {
@@ -265,6 +268,14 @@ Page({
     // 错误监听
     audioManager.on('error', (err) => {
       err = err || {};
+      const nativeErrorMessage = String(err.errMsg || err.message || '');
+      const isIdleOperationFailure = !this.data.isPlaying &&
+        /(?:operateAudio:fail:)?(?:pause|stop) audio fail/i.test(nativeErrorMessage);
+      if (isIdleOperationFailure) {
+        logger.warn('忽略空闲音频操作失败', { error: err });
+        return;
+      }
+
       logger.error('音频播放失败', { error: err });
       const errMsgMap = {
         10001: '系统错误（音频服务异常）',
@@ -277,7 +288,8 @@ Page({
       const errMsg = errMsgMap[errCode] || `未知错误（错误码：${errCode}）`;
 
       wx.toast({ title: errMsg, icon: 'none', duration: 3000 });
-      this.resetPlayState(true);
+      // onError 内不再调用 stop 或清空 src，避免原生操作失败再次触发 onError。
+      this.resetPlayState(true, false);
       this.setData({ currentTime: '00:00', progress: 0 });
     });
 
@@ -339,7 +351,7 @@ Page({
 
     // 保留你原有的重置逻辑
     if (this.data.audioManager) {
-      this.data.audioManager.pause();
+      if (this.data.isPlaying) this.data.audioManager.pause();
       this.clearProgressTimer();
       this.data.audioManager.off('canplay'); // 移除旧的监听
     }
@@ -385,9 +397,9 @@ Page({
     const { isPlaying, playbackRate } = this.data;
 
     if (!isPlaying) {
-      // 保留你原有的重置逻辑
-      this.data.audioManager.stop();
-      this.data.audioManager.load(url); // 替换原生src = url
+      // 选中录音时已经设置过 src。重复 stop + 重设同一地址会中断首次加载，
+      // 部分微信客户端会先触发一次可恢复的 onError，随后又正常播放。
+      this.data.audioManager.load(url);
       this.data.audioManager.setPlaybackRate(playbackRate || 1);
 
       // 保留超时定时器逻辑
@@ -422,19 +434,9 @@ Page({
         }
       };
 
-      // InnerAudioContext的时长判断
-      if (this.data.audioManager.getDuration() > 0) {
-        playAudio();
-      } else {
-        wx.showLoading({ title: '加载音频中...' });
-        const onCanplay = () => {
-          wx.hideLoading();
-          playAudio();
-          this.data.audioManager.off('canplay', onCanplay);
-        };
-        this.data.audioManager.on('canplay', onCanplay);
-        setTimeout(() => wx.hideLoading(), 2000);
-      }
+      // InnerAudioContext 支持在资源尚未完成加载时调用 play；客户端会在就绪后自动开始。
+      // 不等待 canplay，避免该事件在监听器注册前已经触发而吞掉第一次点击。
+      playAudio();
 
     } else {
       // 暂停逻辑（InnerAudioContext）
@@ -523,7 +525,7 @@ Page({
     }
   },
 
-  resetPlayState(clearSrc = false) {
+  resetPlayState(clearSrc = false, operateAudio = true) {
     const { audioList, currentPlayId } = this.data;
     if (!this.data.audioManager || !currentPlayId) return;
 
@@ -533,8 +535,8 @@ Page({
     }));
     this.setData({ audioList: newList, isPlaying: false });
 
-    this.data.audioManager.stop(); // InnerAudioContext
-    clearSrc && this.data.audioManager.load(''); // InnerAudioContext
+    if (operateAudio) this.data.audioManager.stop();
+    // 不向 InnerAudioContext 写入空 src；微信会把它作为新的文件错误并再次触发 onError。
     if (clearSrc) {
       this.setData({ 
         currentTime: '00:00', 
