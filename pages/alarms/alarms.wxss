@@ -292,7 +292,13 @@
 }
 
 .handle-button {
+  flex-shrink: 0;
   margin-left: auto;
+  text-align: center;
+}
+
+.action-pressed {
+  opacity: 0.75;
 }
 
 .handled-time {

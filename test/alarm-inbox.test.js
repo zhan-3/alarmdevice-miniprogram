@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { formatDateTime, normalizeAlarmItems } = require('../utils/alarmInbox');
+const { formatDateTime, normalizeAlarmItems, mergeAlarmItems } = require('../utils/alarmInbox');
 
 test('formats recent alarm times in a human-friendly way', () => {
   const now = new Date('2026-09-05T18:00:00');
@@ -26,4 +26,22 @@ test('normalizes alarm ids without inventing status', () => {
 
 test('treats a missing alarm collection as empty', () => {
   assert.deepEqual(normalizeAlarmItems(null), []);
+});
+
+test('appends alarm pages without duplicating stable alarm ids', () => {
+  const firstPage = [{ alarmId: '3' }, { alarmId: '2' }];
+  const secondPage = [{ alarmId: '2' }, { alarmId: '1' }];
+
+  assert.deepEqual(mergeAlarmItems(firstPage, secondPage), [
+    { alarmId: '3' },
+    { alarmId: '2' },
+    { alarmId: '1' }
+  ]);
+});
+
+test('keeps alarm items without ids instead of silently dropping data', () => {
+  assert.deepEqual(mergeAlarmItems(null, [{ alarmId: '' }, { alarmId: '' }]), [
+    { alarmId: '' },
+    { alarmId: '' }
+  ]);
 });

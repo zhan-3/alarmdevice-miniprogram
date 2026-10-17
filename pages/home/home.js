@@ -51,7 +51,9 @@ Page({
         showCancel: false,
         confirmText: '去绑定'
       }).then(() => {
-        wx.navigateTo({ url: '/pages/setting/setting' });
+        wx.reLaunch({
+          url: `/pages/login/login?redirect=${encodeURIComponent('/pages/home/home')}`
+        });
       });
       return;
     }
@@ -74,7 +76,9 @@ Page({
   },
 
   goBindPhone() {
-    wx.navigateTo({ url: '/pages/setting/setting' });
+    wx.reLaunch({
+      url: `/pages/login/login?redirect=${encodeURIComponent('/pages/home/home')}`
+    });
   },
 
   startPolling() {

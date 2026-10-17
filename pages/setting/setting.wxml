@@ -15,32 +15,8 @@
             </view>
           </view>
         </view>
-        <button class="bind-phone-btn" wx:if="{{!userInfo.phone}}" bindtap="showPhoneModal">
-          <app-icon name="smartphone" size="16" />
-          <text>绑定手机号</text>
-        </button>
       </view>
     </white-card>
-
-    <!-- 手机号绑定弹窗 -->
-    <view class="modal-mask" wx:if="{{showPhoneModal}}" bindtap="hidePhoneModal"></view>
-    <view class="modal-container" wx:if="{{showPhoneModal}}">
-      <view class="modal-title">绑定手机号</view>
-      <view class="modal-form">
-        <input class="modal-input {{phoneError ? 'input-error' : ''}}" type="number" maxlength="11" placeholder="请输入手机号" bindinput="onPhoneInput" />
-        <view class="phone-code-row">
-          <input class="modal-input phone-code-input" type="number" maxlength="6" placeholder="6位验证码" bindinput="onPhoneVerificationCodeInput" />
-          <button class="phone-code-button" bindtap="sendPhoneVerificationCode" disabled="{{isSendingPhoneCode || phoneCodeCountdown > 0}}">
-            {{phoneCodeCountdown > 0 ? phoneCodeCountdown + '秒' : isSendingPhoneCode ? '发送中...' : '获取验证码'}}
-          </button>
-        </view>
-        <text wx:if="{{phoneErrorMessage}}" class="input-error-tip">{{phoneErrorMessage}}</text>
-      </view>
-      <view class="modal-btn-group">
-        <view class="modal-btn cancel {{isBindingPhone ? 'btn-disabled' : ''}}" bindtap="hidePhoneModal" hover-class="btn-press">取消</view>
-        <view class="modal-btn confirm {{phoneError || isBindingPhone ? 'btn-disabled' : ''}}" bindtap="confirmPhone" hover-class="btn-press">{{isBindingPhone ? '保存中…' : '确定'}}</view>
-      </view>
-    </view>
 
     <view wx:if="{{isDeviceSetting && deviceLoading}}" class="loading-screen">
       <text class="loading-text">加载设备信息...</text>

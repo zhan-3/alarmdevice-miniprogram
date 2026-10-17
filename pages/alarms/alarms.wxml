@@ -93,12 +93,15 @@
               data-sn="{{item.deviceSn}}"
               bindtap="openAlarmLocation"
             >查看位置</view>
-            <button
+            <view
               wx:if="{{item.status === 'pending'}}"
               class="handle-button {{handlingId === item.alarmId ? 'btn-disabled' : ''}}"
               data-id="{{item.alarmId}}"
-              bindtap="handleAlarm"
-            >{{handlingId === item.alarmId ? '确认中…' : '确认已处理'}}</button>
+              catchtap="handleAlarm"
+              hover-class="action-pressed"
+              aria-role="button"
+              aria-label="确认该报警已处理"
+            >{{handlingId === item.alarmId ? '确认中…' : '确认已处理'}}</view>
             <text wx:elif="{{item.displayHandledAt}}" class="handled-time">{{item.displayHandledAt}} 已确认</text>
           </view>
         </view>

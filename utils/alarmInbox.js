@@ -31,4 +31,22 @@ function normalizeAlarmItems(items) {
   }));
 }
 
-module.exports = { formatDateTime, normalizeAlarmItems };
+function mergeAlarmItems(currentItems, incomingItems) {
+  const merged = [];
+  const seenIds = new Set();
+  const items = [
+    ...(Array.isArray(currentItems) ? currentItems : []),
+    ...(Array.isArray(incomingItems) ? incomingItems : [])
+  ];
+
+  items.forEach(item => {
+    const alarmId = String(item && item.alarmId || '');
+    if (alarmId && seenIds.has(alarmId)) return;
+    if (alarmId) seenIds.add(alarmId);
+    merged.push(item);
+  });
+
+  return merged;
+}
+
+module.exports = { formatDateTime, normalizeAlarmItems, mergeAlarmItems };

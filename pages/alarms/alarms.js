@@ -1,7 +1,7 @@
 import http from '../../utils/http';
 import { getStorage } from '../../utils/storage';
 import logger from '../../utils/logger';
-const { normalizeAlarmItems } = require('../../utils/alarmInbox');
+const { normalizeAlarmItems, mergeAlarmItems } = require('../../utils/alarmInbox');
 const { requestAlarmSubscription } = require('../../utils/alarmSubscription');
 
 Page({
@@ -43,8 +43,12 @@ Page({
     if (this.data.isLogin) this.loadAlarms(true);
   },
 
-  async loadAlarms(reset = false) {
-    if (!this.data.isLogin || this.data.loading) return;
+  async loadAlarms(reset = false, queueIfBusy = false) {
+    if (!this.data.isLogin) return;
+    if (this.data.loading) {
+      if (reset && queueIfBusy) this.reloadAfterCurrentLoad = true;
+      return;
+    }
     const page = reset ? 1 : this.data.page;
     this.setData({ loading: true, loadError: false });
     try {
@@ -56,7 +60,7 @@ Page({
       const result = res.data || {};
       const items = normalizeAlarmItems(result.items);
       this.setData({
-        alarms: reset ? items : [...this.data.alarms, ...items],
+        alarms: reset ? items : mergeAlarmItems(this.data.alarms, items),
         page: page + 1,
         hasMore: Boolean(result.hasMore)
       });
@@ -69,6 +73,10 @@ Page({
       }
     } finally {
       this.setData({ loading: false });
+      if (this.reloadAfterCurrentLoad) {
+        this.reloadAfterCurrentLoad = false;
+        await this.loadAlarms(true);
+      }
     }
   },
 
@@ -115,18 +123,23 @@ Page({
   async handleAlarm(e) {
     const alarmId = String(e.currentTarget.dataset.id || '');
     if (!alarmId || this.data.handlingId) return;
-    const confirmed = await wx.modal({
-      title: '确认已经处理？',
-      content: '你和其他联系人都将看到“已处理”。这不会改变设备当前状态。',
-      confirmText: '确认已处理'
-    });
-    if (!confirmed) return;
 
     this.setData({ handlingId: alarmId });
     try {
+      const confirmed = await new Promise((resolve, reject) => {
+        wx.showModal({
+          title: '确认已经处理？',
+          content: '你和其他联系人都将看到“已处理”。这不会改变设备当前状态。',
+          confirmText: '确认已处理',
+          success: result => resolve(Boolean(result.confirm)),
+          fail: reject
+        });
+      });
+      if (!confirmed) return;
+
       await http.post('/user/alarms/handle', { alarmId });
       wx.showToast({ title: '已确认处理', icon: 'success' });
-      await this.loadAlarms(true);
+      await this.loadAlarms(true, true);
     } catch (error) {
       logger.error('标记报警处理失败', { alarmId, error });
     } finally {
