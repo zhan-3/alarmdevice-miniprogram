@@ -4,6 +4,8 @@ const LOGIN_URL = '/pages/login/login';
 const HOME_URL = '/pages/alarms/alarms';
 const POST_LOGIN_PATHS = new Set([
   HOME_URL,
+  '/pages/alarm-history/alarm-history',
+  '/pages/alarm-history-detail/alarm-history-detail',
   '/pages/home/home',
   '/pages/devicebinding/devicebinding'
 ]);

@@ -1,0 +1,10 @@
+{
+  "navigationBarTitleText": "处理历史",
+  "enablePullDownRefresh": true,
+  "onReachBottomDistance": 120,
+  "backgroundColor": "#F5F6F7",
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "app-icon": "/components/app-icon/app-icon"
+  }
+}

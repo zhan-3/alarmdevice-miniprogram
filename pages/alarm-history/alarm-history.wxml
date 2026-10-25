@@ -1,0 +1,145 @@
+<view class="history-page">
+  <view class="history-header">
+    <view>
+      <text class="history-title">处理历史</text>
+      <text class="history-subtitle">仅显示当前仍绑定设备的已处理报警</text>
+    </view>
+    <view
+      class="filter-trigger {{hasActiveFilters ? 'active' : ''}}"
+      bindtap="toggleFilters"
+      hover-class="tap-active"
+      aria-role="button"
+      aria-label="{{filtersExpanded ? '收起筛选' : '展开筛选'}}"
+    >
+      <app-icon name="settings-2" size="17" />
+      <text>{{hasActiveFilters ? '已筛选' : '筛选'}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{filtersExpanded}}" class="filter-panel">
+    <view class="field-group">
+      <text class="field-label">关键词</text>
+      <input
+        class="text-input"
+        value="{{keywordInput}}"
+        placeholder="设备 SN、设备别名或处理人"
+        confirm-type="search"
+        bindinput="onKeywordInput"
+        bindconfirm="applyFilters"
+      />
+    </view>
+
+    <view class="field-group">
+      <text class="field-label">处理日期</text>
+      <view class="date-row">
+        <picker class="date-picker" mode="date" value="{{startDate}}" bindchange="onStartDateChange">
+          <view class="picker-value {{startDate ? '' : 'placeholder'}}">{{startDate || '开始日期'}}</view>
+        </picker>
+        <text class="date-separator">至</text>
+        <picker class="date-picker" mode="date" value="{{endDate}}" bindchange="onEndDateChange">
+          <view class="picker-value {{endDate ? '' : 'placeholder'}}">{{endDate || '结束日期'}}</view>
+        </picker>
+      </view>
+      <view wx:if="{{startDate || endDate}}" class="date-clear-row">
+        <text wx:if="{{startDate}}" bindtap="clearStartDate">清除开始日期</text>
+        <text wx:if="{{endDate}}" bindtap="clearEndDate">清除结束日期</text>
+      </view>
+    </view>
+
+    <view class="field-group">
+      <text class="field-label">处理人</text>
+      <view class="picker-value handler-value" bindtap="openHandlerPicker" aria-role="button">
+        <text class="{{selectedHandlerName ? '' : 'placeholder'}}">{{selectedHandlerName || '全部处理人'}}</text>
+        <text class="picker-arrow">›</text>
+      </view>
+    </view>
+
+    <view class="filter-actions">
+      <button class="secondary-button" bindtap="clearFilters">清除</button>
+      <button class="primary-button" bindtap="applyFilters">查询</button>
+    </view>
+  </view>
+
+  <view wx:if="{{handlerPickerVisible}}" class="handler-panel">
+    <view class="handler-search">
+      <input
+        class="handler-search-input"
+        value="{{handlerKeyword}}"
+        placeholder="搜索处理人"
+        confirm-type="search"
+        bindinput="onHandlerSearchInput"
+        bindconfirm="searchHandlers"
+        focus="{{handlerPickerVisible}}"
+      />
+      <text class="search-action" bindtap="searchHandlers">搜索</text>
+      <text class="close-action" bindtap="closeHandlerPicker">关闭</text>
+    </view>
+    <view class="handler-option" bindtap="clearHandler">全部处理人</view>
+    <view
+      wx:for="{{handlers}}"
+      wx:key="id"
+      class="handler-option {{selectedHandlerId === item.id ? 'selected' : ''}}"
+      data-id="{{item.id}}"
+      data-name="{{item.name}}"
+      bindtap="selectHandler"
+    >{{item.name}}</view>
+    <view wx:if="{{handlersLoading}}" class="handler-state">正在搜索…</view>
+    <view wx:elif="{{handlersLoadError}}" class="handler-state error" bindtap="searchHandlers">加载失败，点击重试</view>
+    <view wx:elif="{{handlers.length === 0}}" class="handler-state">没有匹配的处理人</view>
+  </view>
+
+  <view wx:if="{{loading && items.length === 0}}" class="loading-screen history-loading">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在加载处理历史…</text>
+  </view>
+
+  <view wx:elif="{{loadError && items.length === 0}}" class="state-panel">
+    <view class="state-icon"><app-icon name="circle-minus-danger" size="42" label="加载失败" /></view>
+    <text class="state-title">暂时无法获取处理历史</text>
+    <text class="state-hint">请检查网络连接后重试</text>
+    <button class="primary-button retry-button" bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <view wx:elif="{{!loading && items.length === 0}}" class="state-panel calm-state">
+    <view class="state-icon"><app-icon name="clipboard-list" size="40" muted="{{true}}" label="暂无处理历史" /></view>
+    <text class="state-title">{{hasActiveFilters ? '没有符合条件的记录' : '还没有处理历史'}}</text>
+    <text class="state-hint">{{hasActiveFilters ? '可调整日期、处理人或关键词' : '已处理的报警会显示在这里'}}</text>
+    <button wx:if="{{hasActiveFilters}}" class="secondary-button empty-action" bindtap="clearFilters">清除筛选</button>
+  </view>
+
+  <view wx:else class="history-list">
+    <view
+      wx:for="{{items}}"
+      wx:key="alarmId"
+      class="history-item"
+      data-id="{{item.alarmId}}"
+      bindtap="openDetail"
+      hover-class="tap-active"
+      aria-role="button"
+      aria-label="查看 {{item.deviceName || item.deviceSn}} 的处理详情"
+    >
+      <view class="history-item-main">
+        <view class="history-item-topline">
+          <view class="device-identity">
+            <text class="device-name">{{item.deviceName || (item.deviceSn ? '设备 ' + item.deviceSn : '未知设备')}}</text>
+            <text wx:if="{{item.deviceName && item.deviceSn}}" class="device-sn">SN {{item.deviceSn}}</text>
+          </view>
+          <text class="handled-badge">已处理</text>
+        </view>
+        <text class="alarm-time">报警时间 · {{item.displayAlarmTime}}</text>
+        <view class="handling-summary">
+          <app-icon name="user-round" size="15" muted="{{true}}" />
+          <text>{{item.displayHandlerName}}</text>
+          <text class="summary-divider">·</text>
+          <text>{{item.displayHandledAt}}</text>
+        </view>
+      </view>
+      <image class="row-arrow" src="/images/icons/chevron-right-gray.svg" mode="aspectFit" />
+    </view>
+
+    <view wx:if="{{loading}}" class="list-footer">正在加载更多…</view>
+    <view wx:elif="{{loadMoreError}}" class="list-footer retry-more" bindtap="retryLoad">加载失败，点击重试</view>
+    <view wx:elif="{{hasMore}}" class="list-footer">继续上拉加载</view>
+    <view wx:else class="list-footer end-text">已显示全部处理历史</view>
+  </view>
+</view>

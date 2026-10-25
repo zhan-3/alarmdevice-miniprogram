@@ -324,6 +324,15 @@ test('safe explicit target beats pending binding, unsafe target falls back to pe
   assert.equal(explicitOutcome.target, '/pages/home/home');
   assert.equal(pendingOutcome.target, '/pages/devicebinding/devicebinding?sn=A%20001');
   assert.equal(fallbackOutcome.target, '/pages/alarms/alarms');
+
+  for (const target of [
+    '/pages/alarm-history/alarm-history',
+    '/pages/alarm-history-detail/alarm-history-detail?alarmId=2790303266003'
+  ]) {
+    const history = createHarness({ stored: { loginToken: 'login-user' } });
+    const outcome = await history.auth.restore({ target });
+    assert.equal(outcome.target, target);
+  }
 });
 
 test('explicit login invalidation clears state and applies the login navigation policy', () => {

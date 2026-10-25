@@ -1,6 +1,8 @@
 {
 "pages": [
     "pages/alarms/alarms",
+    "pages/alarm-history/alarm-history",
+    "pages/alarm-history-detail/alarm-history-detail",
     "pages/home/home",
     "pages/login/login",
     "pages/device-detail/device-detail",

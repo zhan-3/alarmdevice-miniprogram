@@ -13,12 +13,6 @@ Page({
     authRetryNeeded: false,
     hasMore: false,
     page: 1,
-    handledAlarms: [],
-    handledExpanded: false,
-    handledLoading: false,
-    handledLoadError: false,
-    handledHasMore: false,
-    handledPage: 1,
     handlingId: '',
     subscribing: false,
     subscriptionAccepted: false
@@ -88,41 +82,6 @@ Page({
     this.loadAlarms(true);
   },
 
-  async showHandledAlarms() {
-    if (this.data.handledExpanded) return;
-    this.setData({ handledExpanded: true });
-    await this.loadHandledAlarms(true);
-  },
-
-  async loadHandledAlarms(reset = false) {
-    if (!this.data.isLogin || this.data.handledLoading) return;
-    const page = reset ? 1 : this.data.handledPage;
-    this.setData({ handledLoading: true, handledLoadError: false });
-    try {
-      const res = await http.get('/user/alarms', {
-        status: 'handled',
-        page,
-        pageSize: 20
-      }, { credentialScope: 'login' });
-      const result = res.data || {};
-      const items = normalizeAlarmItems(result.items, getApp().listBoundDevices());
-      this.setData({
-        handledAlarms: reset ? items : mergeAlarmItems(this.data.handledAlarms, items),
-        handledPage: page + 1,
-        handledHasMore: Boolean(result.hasMore)
-      });
-    } catch (error) {
-      logger.error('加载已处理报警失败', { error });
-      this.setData({ handledLoadError: true });
-    } finally {
-      this.setData({ handledLoading: false });
-    }
-  },
-
-  retryHandledAlarms() {
-    this.loadHandledAlarms(true);
-  },
-
   async subscribeAlarmNotifications() {
     if (this.data.subscribing || this.data.subscriptionAccepted) return;
     this.setData({ subscribing: true });
@@ -150,10 +109,6 @@ Page({
 
   loadMore() {
     if (this.data.hasMore && !this.data.loading) this.loadAlarms(false);
-  },
-
-  loadMoreHandled() {
-    if (this.data.handledHasMore && !this.data.handledLoading) this.loadHandledAlarms(false);
   },
 
   onPullDownRefresh() {
@@ -186,18 +141,9 @@ Page({
       if (!confirmed) return;
 
       await http.post('/user/alarms/handle', { alarmId }, { credentialScope: 'login' });
-      const handledAlarm = this.data.alarms.find(item => String(item.alarmId) === alarmId);
-      const updates = {
+      this.setData({
         alarms: this.data.alarms.filter(item => String(item.alarmId) !== alarmId)
-      };
-      if (handledAlarm && this.data.handledExpanded) {
-        updates.handledAlarms = [{
-          ...handledAlarm,
-          status: 'handled',
-          displayHandledAt: '刚刚'
-        }, ...this.data.handledAlarms];
-      }
-      this.setData(updates);
+      });
       wx.showToast({ title: '已确认处理', icon: 'success' });
     } catch (error) {
       logger.error('标记报警处理失败', { alarmId, error });
@@ -226,6 +172,10 @@ Page({
 
   goLogin() {
     wx.navigateTo({ url: '/pages/login/login' });
+  },
+
+  goHistory() {
+    wx.navigateTo({ url: '/pages/alarm-history/alarm-history' });
   },
 
   goProfile() {

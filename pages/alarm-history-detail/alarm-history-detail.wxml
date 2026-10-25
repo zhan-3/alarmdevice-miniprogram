@@ -1,0 +1,71 @@
+<view class="detail-page">
+  <view wx:if="{{loading}}" class="loading-screen">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在加载处理详情…</text>
+  </view>
+
+  <view wx:elif="{{unavailable}}" class="state-panel">
+    <view class="state-icon"><app-icon name="inbox" size="42" muted="{{true}}" label="记录不可用" /></view>
+    <text class="state-title">记录不存在或设备已解绑</text>
+    <text class="state-hint">仅可查看当前仍绑定设备的处理历史</text>
+  </view>
+
+  <view wx:elif="{{loadError}}" class="state-panel">
+    <view class="state-icon"><app-icon name="circle-minus-danger" size="42" label="加载失败" /></view>
+    <text class="state-title">暂时无法获取处理详情</text>
+    <text class="state-hint">请检查网络连接后重试</text>
+    <button class="primary-button" bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <block wx:elif="{{item}}">
+    <view class="detail-heading">
+      <view class="detail-heading-copy">
+        <text class="device-name">{{item.deviceName || (item.deviceSn ? '设备 ' + item.deviceSn : '未知设备')}}</text>
+        <text wx:if="{{item.deviceSn}}" class="device-sn">SN {{item.deviceSn}}</text>
+      </view>
+      <text class="handled-badge">已处理</text>
+    </view>
+
+    <view class="timeline-panel">
+      <view class="timeline-row">
+        <view class="timeline-marker alarm-marker"></view>
+        <view class="timeline-copy">
+          <text class="timeline-label">设备报警</text>
+          <text class="timeline-value">{{item.displayAlarmTime}}</text>
+        </view>
+      </view>
+      <view class="timeline-line"></view>
+      <view class="timeline-row">
+        <view class="timeline-marker handled-marker"></view>
+        <view class="timeline-copy">
+          <text class="timeline-label">确认处理</text>
+          <text class="timeline-value">{{item.displayHandledAt}}</text>
+          <text class="handler-name">{{item.displayHandlerName}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="detail-section">
+      <text class="section-title">报警信息</text>
+      <view class="info-row">
+        <view class="info-label"><app-icon name="map-pin" size="17" muted="{{true}}" /><text>报警位置</text></view>
+        <view wx:if="{{item.hasLocation}}" class="info-action" bindtap="openAlarmLocation" aria-role="button">在地图中查看</view>
+        <text wx:else class="info-value muted">未提供</text>
+      </view>
+      <view wx:if="{{item.fileId}}" class="info-row">
+        <view class="info-label"><app-icon name="audio-lines" size="17" muted="{{true}}" /><text>报警录音</text></view>
+        <view
+          class="info-action recording-action {{recordingLoading ? 'disabled' : ''}}"
+          bindtap="toggleRecording"
+          aria-role="button"
+          aria-label="{{recordingLoading ? '正在加载报警录音' : recordingPlaying ? '暂停报警录音' : '播放报警录音'}}"
+        >{{recordingLoading ? '加载中…' : recordingPlaying ? '暂停' : recordingPath ? '继续播放' : '播放录音'}}</view>
+      </view>
+    </view>
+
+    <view class="notice-bar">
+      <app-icon name="triangle-alert" size="18" label="处理状态说明" />
+      <text>“已处理”仅表示人工确认，不代表设备当前已经恢复正常。</text>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "处理详情",
+  "backgroundColor": "#F5F6F7",
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "app-icon": "/components/app-icon/app-icon"
+  }
+}

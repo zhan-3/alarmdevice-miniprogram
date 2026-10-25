@@ -31,28 +31,9 @@
   background: #f1eee9;
 }
 
-.notice-bar {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  margin-top: 14px;
-  margin-bottom: 14px;
-  padding: 11px 13px;
-  border: 1px solid #f5d27d;
-  border-radius: var(--radius-md);
-  background: #fff8e8;
-  color: #765000;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.notice-bar text {
-  flex: 1;
-  min-width: 0;
-}
-
 .subscription-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
@@ -76,7 +57,7 @@
 }
 
 .subscription-copy {
-  flex: 1;
+  flex: 1 1 calc(100% - 52px);
   min-width: 0;
 }
 
@@ -99,18 +80,19 @@
 }
 
 .subscription-button {
-  flex-shrink: 0;
-  min-width: 94px;
-  height: 40px;
+  flex: 0 0 100%;
+  min-width: 0;
+  height: 44px;
   margin: 0;
   padding: 0 14px;
+  box-sizing: border-box;
   border: 1px solid var(--orange-border);
   border-radius: 10px;
   background: #FFFFFF;
   color: var(--orange-dark);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 38px;
+  line-height: 42px;
 }
 
 .subscription-button::after {
@@ -146,10 +128,6 @@
   font-size: 12px;
 }
 
-.handled-heading {
-  margin-top: 22px;
-}
-
 .handled-disclosure {
   display: flex;
   align-items: center;
@@ -180,13 +158,9 @@
 }
 
 .handled-disclosure-arrow {
-  color: #777;
-  font-size: 22px;
-  line-height: 1;
-}
-
-.compact-state-panel {
-  padding: 24px 16px;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
 }
 
 .alarm-sheet {

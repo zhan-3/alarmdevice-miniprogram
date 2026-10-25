@@ -61,30 +61,18 @@ test('accepted alarm subscription updates and disables the button state', async 
   assert.equal(toasts.at(-1).title, '已订阅下一次报警提醒');
 });
 
-test('handled alarms are requested only after the user expands them', async () => {
-  const requests = [];
+test('the alarm inbox opens the independent handling history page', () => {
+  const navigations = [];
   const definition = loadAlarmPage({
-    wx: {},
-    app: { listBoundDevices: () => [] },
-    http: {
-      async get(url, data) {
-        requests.push({ url, data });
-        return { data: { items: [], hasMore: false } };
-      }
-    },
+    wx: { navigateTo(options) { navigations.push(options.url); } },
+    http: {},
     logger: { error() {} }
   });
-  const page = createPage(definition, {
-    data: { ...definition.data, isLogin: true },
-    loadHandledAlarms: definition.loadHandledAlarms
-  });
+  const page = createPage(definition);
 
-  assert.equal(requests.length, 0);
-  await page.showHandledAlarms();
+  page.goHistory();
 
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].data.status, 'handled');
-  assert.equal(page.data.handledExpanded, true);
+  assert.deepEqual(navigations, ['/pages/alarm-history/alarm-history']);
 });
 
 test('tapping a pending alarm opens a valid modal and sends the handle request', async () => {
