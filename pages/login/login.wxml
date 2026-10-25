@@ -10,8 +10,8 @@
 
   <view class="login-content">
     <block wx:if="{{step === 1}}">
-      <button class="login-btn" bindtap="doLogin" disabled="{{loading}}">
-        <text class="btn-text">{{loading ? '登录中...' : '微信登录'}}</text>
+      <button class="login-btn" bindtap="doLogin" disabled="{{loading || privacyAuthorizing}}">
+        <text class="btn-text">{{privacyAuthorizing ? '等待隐私授权…' : loading ? '登录中...' : '微信登录'}}</text>
       </button>
     </block>
 
@@ -37,16 +37,24 @@
             disabled="{{confirmingPhone}}"
             bindinput="onVerificationCodeInput"
           />
-          <button class="code-button" bindtap="sendVerificationCode" disabled="{{sendingCode || countdown > 0}}">
+          <button class="code-button" bindtap="sendVerificationCode" disabled="{{loading || privacyAuthorizing || sendingCode || confirmingPhone || countdown > 0}}">
             {{countdown > 0 ? countdown + '秒' : sendingCode ? '发送中...' : '获取验证码'}}
           </button>
         </view>
-        <button class="login-btn" bindtap="confirmPhone" disabled="{{loading || confirmingPhone || phoneError}}">
-          <text class="btn-text">{{loading || confirmingPhone ? '验证中...' : '验证并进入'}}</text>
+        <view class="usage-notice">
+          <text class="usage-notice-title">使用须知</text>
+          <text class="usage-notice-copy">报警标记为“已处理”仅表示人工确认，不代表设备当前已经恢复正常。</text>
+        </view>
+        <button class="login-btn" bindtap="confirmPhone" disabled="{{loading || privacyAuthorizing || confirmingPhone || sendingCode || phoneError}}">
+          <text class="btn-text">{{privacyAuthorizing ? '等待隐私授权…' : loading || confirmingPhone ? '验证中...' : '验证并进入'}}</text>
         </button>
       </view>
     </block>
 
+    <view class="privacy-agreement">
+      <text class="privacy-hint">首次使用需完成微信隐私授权</text>
+      <button class="privacy-link" bindtap="openPrivacyPolicy">查看《用户隐私保护指引》</button>
+    </view>
     <text wx:if="{{errMsg}}" class="error-tip">{{errMsg}}</text>
   </view>
 </view>

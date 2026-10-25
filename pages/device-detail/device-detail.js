@@ -15,6 +15,7 @@ Page({
     tempName: '',
     tempContactName: '',
     tempContactPhone: '',
+    contactPhoneError: '',
     swipeId: null,
     swipeOffset: 0,
     touchStartX: 0,
@@ -137,25 +138,41 @@ Page({
     this.setData({
       showAddContactModal: true,
       tempContactName: '',
-      tempContactPhone: ''
+      tempContactPhone: '',
+      contactPhoneError: ''
     });
   },
 
   closeAddContactModal() {
-    this.setData({ showAddContactModal: false, tempContactName: '', tempContactPhone: '' });
+    this.setData({ showAddContactModal: false, tempContactName: '', tempContactPhone: '', contactPhoneError: '' });
   },
 
   onContactNameInput(e) {
     this.setData({ tempContactName: e.detail.value.trim() });
   },
 
+  isOwnContactPhone(phone) {
+    const app = getApp();
+    const profile = app.globalData && app.globalData.userInfo;
+    const ownPhone = String((profile && profile.phone) || getStorage('phone') || '').trim();
+    return Boolean(ownPhone && String(phone).trim() === ownPhone);
+  },
+
   onContactPhoneInput(e) {
-    this.setData({ tempContactPhone: e.detail.value.trim() });
+    const phone = e.detail.value.trim();
+    this.setData({
+      tempContactPhone: phone,
+      contactPhoneError: this.isOwnContactPhone(phone) ? '你已默认接收报警，无需添加自己' : ''
+    });
   },
 
   async saveContact() {
     if (this.data.savingContact) return;
     const { tempContactName, tempContactPhone, device } = this.data;
+    if (this.isOwnContactPhone(tempContactPhone)) {
+      this.setData({ contactPhoneError: '你已默认接收报警，无需添加自己' });
+      return;
+    }
     if (!tempContactName) {
       wx.toast({ title: '请输入联系人姓名', icon: 'none' });
       return;

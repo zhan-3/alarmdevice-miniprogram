@@ -15,6 +15,7 @@ Page({
     confirmingPhone: false,
     countdown: 0,
     errMsg: '',
+    privacyAuthorizing: false,
     postLoginUrl: '/pages/alarms/alarms'
   },
 
@@ -52,6 +53,11 @@ Page({
     this.renderAuthOutcome(outcome)
   },
 
+  onShow() {
+    // 未登录时回首页仍会跳回登录页，不展示无效的原生回首页入口。
+    if (typeof wx.hideHomeButton === 'function') wx.hideHomeButton()
+  },
+
   renderAuthOutcome(outcome) {
     if (outcome.type === 'phone-required') {
       this.setData({ step: 2, loading: false, postLoginUrl: outcome.target })
@@ -68,11 +74,47 @@ Page({
     if (this.phoneVerification) this.phoneVerification.dispose()
   },
 
+  openPrivacyPolicy() {
+    if (typeof wx.openPrivacyContract !== 'function') {
+      wx.showToast({ title: '请升级微信后查看隐私指引', icon: 'none' })
+      return
+    }
+    wx.openPrivacyContract({
+      fail: () => wx.showToast({ title: '隐私指引暂时无法打开，请稍后重试', icon: 'none' })
+    })
+  },
+
+  async requirePrivacyAgreement() {
+    if (this.data.privacyAuthorizing) return false
+    if (typeof wx.requirePrivacyAuthorize !== 'function') {
+      this.setData({ errMsg: '请升级微信后再登录或注册' })
+      return false
+    }
+    this.setData({ privacyAuthorizing: true, errMsg: '' })
+    try {
+      // 不注册自定义隐私监听，让微信展示官方授权弹窗。
+      // 已授权的用户直接成功；是否需要重新授权由微信判断。
+      await new Promise((resolve, reject) => {
+        wx.requirePrivacyAuthorize({ success: resolve, fail: reject })
+      })
+      return true
+    } catch (error) {
+      this.setData({ errMsg: '未完成隐私授权，暂未继续操作；你可以重新点击按钮授权' })
+      return false
+    } finally {
+      this.setData({ privacyAuthorizing: false })
+    }
+  },
+
   async doLogin() {
-    if (this.data.loading) return
+    if (this.data.loading || this.data.privacyAuthorizing) return
     this.setData({ loading: true, errMsg: '' })
 
     try {
+      if (!await this.requirePrivacyAgreement()) {
+        this.setData({ loading: false })
+        return
+      }
       const loginRes = await new Promise((resolve, reject) => {
         wx.login({ timeout: 5000, success: resolve, fail: reject })
       })
@@ -103,12 +145,15 @@ Page({
     this.phoneVerification.changeCode(e.detail.value)
   },
 
-  sendVerificationCode() {
+  async sendVerificationCode() {
+    if (this.data.loading || this.data.privacyAuthorizing || this.data.sendingCode || this.data.confirmingPhone || this.data.countdown > 0) return
+    if (!await this.requirePrivacyAgreement()) return
     return this.phoneVerification.send()
   },
 
   async confirmPhone() {
-    if (this.data.loading) return
+    if (this.data.loading || this.data.privacyAuthorizing || this.data.confirmingPhone || this.data.sendingCode) return
+    if (!await this.requirePrivacyAgreement()) return
     const outcome = await this.phoneVerification.confirm()
     if (outcome.status !== 'verified') return
 

@@ -94,7 +94,7 @@
     />
   </view>
   <view class="modal-btn-group">
-    <view class="modal-btn cancel" bindtap="closeEditNameModal" hover-class="btn-press">取消</view>
-    <view class="modal-btn confirm {{savingName ? 'btn-disabled' : ''}}" bindtap="saveName" hover-class="btn-press">{{savingName ? '保存中…' : '保存'}}</view>
+    <button class="modal-btn cancel" bindtap="closeEditNameModal" hover-class="btn-press">取消</button>
+    <button class="modal-btn confirm {{savingName ? 'btn-disabled' : ''}}" disabled="{{savingName}}" bindtap="saveName" hover-class="btn-press">{{savingName ? '保存中…' : '保存'}}</button>
   </view>
 </view>

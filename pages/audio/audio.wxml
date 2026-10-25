@@ -12,35 +12,12 @@
         </view>
       </view>
 
-      <!-- 音频时间轴波形：橙色表示已播放，灰色表示未播放 -->
-      <view class="waveform-meta">
-        <text>音频波形</text>
-        <text class="waveform-state {{isPlaying ? 'is-playing' : ''}}">{{isPlaying ? '播放中' : '已暂停'}}</text>
-      </view>
-      <view
-        class="waveform-wrap"
-        aria-role="progressbar"
-        aria-label="播放进度 {{currentTime}}，总时长 {{formatTotal}}"
-      >
-        <view class="waveform-axis"></view>
-        <view class="waveform {{isPlaying ? 'active' : ''}}">
-          <view
-            wx:for="{{waveformBars}}"
-            wx:key="index"
-            class="wave-bar {{index < progress * waveformBars.length / 100 ? 'played' : ''}}"
-            style="height: {{item}}%;"
-          ></view>
-          <view wx:if="{{progress > 0}}" class="waveform-playhead {{isPlaying ? 'active' : ''}}" style="left: {{progress}}%;">
-            <view class="waveform-playhead-dot"></view>
-          </view>
-        </view>
-      </view>
-
       <!-- 进度条控制 -->
       <view class="player-controls">
         <text class="time-current">{{currentTime}}</text>
         <slider 
           class="progress-slider"
+          aria-label="播放进度 {{currentTime}}，总时长 {{formatTotal}}"
           value="{{progress}}"
           activeColor="#F05A28"
           backgroundColor="#eee"
@@ -53,13 +30,13 @@
 
       <!-- 播放控制按钮 -->
       <view class="control-buttons">
-        <view class="control-btn" bindtap="previousAudio">
+        <view class="control-btn" bindtap="previousAudio" hover-class="control-pressed" aria-role="button" aria-label="上一条录音">
           <image src="/images/last.png" mode="widthFix" lazy-load="true"></image>
         </view>
-        <view class="control-btn play-btn" bindtap="togglePlay">
+        <view class="control-btn play-btn" bindtap="togglePlay" hover-class="control-pressed" aria-role="button" aria-label="{{isPlaying ? '暂停录音' : '播放录音'}}">
           <image src="/images/{{isPlaying ? 'pause' : 'play'}}.png" mode="widthFix" lazy-load="true"></image>
         </view>
-        <view class="control-btn" bindtap="nextAudio">
+        <view class="control-btn" bindtap="nextAudio" hover-class="control-pressed" aria-role="button" aria-label="下一条录音">
           <image src="/images/next.png" mode="widthFix" lazy-load="true"></image>
         </view>
       </view>
