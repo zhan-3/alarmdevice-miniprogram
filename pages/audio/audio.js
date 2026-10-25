@@ -164,14 +164,18 @@ Page({
     if (this.isLoadingRecords) return;
     this.isLoadingRecords = true;
     const app = getApp();
-    const deviceSn = app.globalData.selectedDeviceSn;
-    const deviceAccessToken = app.getDeviceAccessToken(deviceSn);
-    http.get("/user/getRecord", {}, {
-      credentialScope: 'device',
-      credential: deviceAccessToken,
-      deviceSn
+    const deviceId = app.globalData.selectedDeviceSn;
+    if (!deviceId) {
+      this.isLoadingRecords = false;
+      this.setData({ audioList: [], filteredList: [] });
+      return;
+    }
+    http.get("/user/getRecord", { deviceId }, {
+      credentialScope: 'login',
+      deviceId
     })
       .then(res => {
+        if (deviceId !== app.globalData.selectedDeviceSn) return;
         if ( res.code !== 1) {
           const errMsg = res.msg || '获取数据失败';
           res.code !== 200 && wx.toast({ title: errMsg, icon: 'error', duration: 2000 });
@@ -204,6 +208,7 @@ Page({
         this.updateFilteredList();
       })
       .catch(err => {
+        if (err && (err.code === 401 || err.code === 403)) this.setData({ audioList: [], filteredList: [] });
         logger.error('音频列表请求失败', { error: err });
       })
       .finally(() => {

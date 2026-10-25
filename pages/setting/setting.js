@@ -33,25 +33,25 @@ Page({
   },
 
   async loadDevice(deviceId) {
+    this.requestedDeviceId = deviceId;
     this.setData({ deviceLoading: true, deviceLoadError: false });
     try {
       const app = getApp();
-      const deviceEntry = app.getDevice(deviceId);
-      const authToken = deviceEntry ? deviceEntry.deviceAccessToken : '';
+      const authToken = app.getLoginToken();
       const device = await loadDeviceData(deviceId, authToken);
       const markers = buildMarkers(device);
       const deviceLoadError = device.status === 'unknown' && !device.address && markers.length === 0;
       this.setData({ device, markers, deviceLoadError });
     } catch (err) {
       logger.error('设置页加载设备信息失败', { deviceId, error: err });
-      this.setData({ deviceLoadError: true });
+      this.setData({ deviceLoadError: true, device: null, markers: [] });
     } finally {
       this.setData({ deviceLoading: false });
     }
   },
 
   retryLoadDevice() {
-    const deviceId = this.data.device && this.data.device.id;
+    const deviceId = this.requestedDeviceId || (this.data.device && this.data.device.id);
     if (deviceId) this.loadDevice(deviceId);
   },
 
@@ -89,12 +89,11 @@ Page({
     this.setData({ savingName: true });
     try {
       await http.post('/device/updateName', {
-        deviceSn: device.sn,
+        deviceId: device.sn,
         name: newName
       }, {
-        credentialScope: 'device',
-        credential: app.getDeviceAccessToken(device.sn),
-        deviceSn: device.sn
+        credentialScope: 'login',
+        deviceId: device.sn
       });
       app.renameDevice(device.sn, newName);
       this.setData({
@@ -149,16 +148,14 @@ Page({
 
           this.setData({ savingLocation: true });
           try {
-            const app = getApp();
             await http.post('/device/updateLocation', {
-              deviceSn: device.sn,
+              deviceId: device.sn,
               latitude,
               longitude,
               address
             }, {
-              credentialScope: 'device',
-              credential: app.getDeviceAccessToken(device.sn),
-              deviceSn: device.sn
+              credentialScope: 'login',
+              deviceId: device.sn
             });
             this.setData({
               'device.latitude': latitude,

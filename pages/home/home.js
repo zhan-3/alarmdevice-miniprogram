@@ -92,7 +92,7 @@ Page({
     if (this.isPageVisible) this.setData({ userInfo });
   },
 
-  // 遍历所有已绑定设备的token，构建设备列表（并行请求）
+  // 使用同一登录凭证，显式指定每台设备（并行请求）
   async loadAllDevices() {
     if (this.isLoadingDevices) return;
     this.isLoadingDevices = true;
@@ -108,10 +108,9 @@ Page({
       // 并行请求所有设备状态
       const results = await Promise.allSettled(
         boundDevices.map(device =>
-          http.get('/user/bind/status', { deviceSn: device.sn }, {
-            credentialScope: 'device',
-            credential: device.deviceAccessToken,
-            deviceSn: device.sn
+          http.get('/user/bind/status', { deviceId: device.sn }, {
+            credentialScope: 'login',
+            deviceId: device.sn
           }).then(bindRes => {
             if (bindRes.code === 1 && bindRes.data) {
               const remoteName = typeof bindRes.data.name === 'string' ? bindRes.data.name.trim() : '';
@@ -128,6 +127,7 @@ Page({
             return null;
           }).catch(err => {
             logger.error('获取设备状态失败', { deviceSn: device.sn, error: err });
+            if (err && (err.code === 401 || err.code === 403)) return null;
             const displayName = (device.name && device.name !== device.sn) ? device.name : device.sn;
             return {
               id: device.sn,
@@ -188,7 +188,7 @@ Page({
 
   goDeviceDetail(e) {
     const sn = e.currentTarget.dataset.id;
-    // 切换到该设备的token，后续所有请求自动使用对应设备数据
+    // 只更新客户端选中设备，不替换登录凭证
     getApp().selectDevice(sn);
     this.setData({ currentSn: sn });
     wx.navigateTo({

@@ -80,8 +80,8 @@ App({
     return this.boundDeviceSet.list()
   },
 
-  bindDevice(sn, deviceAccessToken, name = '') {
-    const device = this.boundDeviceSet.bind({ sn, deviceAccessToken, name })
+  bindDevice(sn, name = '') {
+    const device = this.boundDeviceSet.bind({ sn, name })
     this.syncBoundDeviceState()
     return device
   },
@@ -94,10 +94,6 @@ App({
 
   getDevice(sn) {
     return this.boundDeviceSet.get(sn)
-  },
-
-  getDeviceAccessToken(sn = this.globalData.selectedDeviceSn) {
-    return this.boundDeviceSet.deviceAccessToken(sn)
   },
 
   renameDevice(sn, name) {

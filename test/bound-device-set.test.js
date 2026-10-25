@@ -1,101 +1,66 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createBoundDeviceSet } = require('../utils/boundDeviceSet');
-
 function memoryStorage(initial = {}) {
   const values = { ...initial };
   return {
-    get(key, fallback = null) {
-      return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : fallback;
-    },
-    set(key, value) {
-      values[key] = value;
-    },
-    remove(key) {
-      delete values[key];
-    },
-    snapshot() {
-      return { ...values };
-    }
+    get: (key, fallback = null) => Object.hasOwn(values, key) ? values[key] : fallback,
+    set(key, value) { values[key] = value; },
+    remove(key) { delete values[key]; },
+    snapshot: () => structuredClone(values)
   };
 }
 
-test('restores and migrates legacy device credentials without changing their meaning', () => {
-  const storage = memoryStorage({
-    deviceTokens: [{ sn: 'A', token: 'access-A', name: '桥 A' }],
-    currentSn: 'A'
-  });
-  const devices = createBoundDeviceSet(storage);
-
-  assert.deepEqual(devices.list(), [{ sn: 'A', name: '桥 A', deviceAccessToken: 'access-A' }]);
-  assert.equal(devices.selectedDeviceSn(), 'A');
-  assert.equal(devices.deviceAccessToken('A'), 'access-A');
-  assert.deepEqual(storage.snapshot().boundDevices, [
-    { sn: 'A', name: '桥 A', deviceAccessToken: 'access-A' }
-  ]);
-  assert.equal(storage.snapshot().selectedDeviceSn, 'A');
+test('migrates cached metadata and selection but discards every device credential', () => {
+  for (const initial of [
+    { deviceTokens: [{ sn: 'A', token: 'legacy-secret', name: '桥 A' }], currentSn: 'A' },
+    { boundDevices: [{ sn: 'A', deviceAccessToken: 'old-secret', name: '桥 A' }], selectedDeviceSn: 'A' }
+  ]) {
+    const storage = memoryStorage(initial);
+    const devices = createBoundDeviceSet(storage);
+    assert.deepEqual(devices.list(), [{ sn: 'A', name: '桥 A' }]);
+    assert.equal(devices.selectedDeviceSn(), 'A');
+    assert.deepEqual(storage.snapshot(), { boundDevices: [{ sn: 'A', name: '桥 A' }], selectedDeviceSn: 'A' });
+  }
 });
 
-test('binding a device atomically stores its credential and selects it', () => {
-  const storage = memoryStorage();
-  const devices = createBoundDeviceSet(storage);
-
-  devices.bind({ sn: 'B', name: '桥 B', deviceAccessToken: 'access-B' });
-
-  assert.deepEqual(devices.list(), [{ sn: 'B', name: '桥 B', deviceAccessToken: 'access-B' }]);
-  assert.equal(devices.selectedDeviceSn(), 'B');
-  assert.equal(devices.deviceAccessToken('B'), 'access-B');
-});
-
-test('selecting a device never changes the login credential', () => {
+test('binding and switching never stores or replaces the login credential', () => {
   const storage = memoryStorage({ loginToken: 'login-user' });
   const devices = createBoundDeviceSet(storage);
-
-  devices.bind({ sn: 'A', name: '桥 A', deviceAccessToken: 'access-A' });
-  devices.bind({ sn: 'B', name: '桥 B', deviceAccessToken: 'access-B' });
-  devices.select('A');
-
+  devices.bind({ sn: 'A', name: '桥 A' });
+  devices.bind({ sn: 'B', name: '桥 B', deviceAccessToken: 'discard-me' });
+  assert.equal(devices.selectedDeviceSn(), 'B');
+  assert.equal(devices.select('A'), true);
+  assert.equal(devices.select('UNBOUND'), false);
   assert.equal(storage.snapshot().loginToken, 'login-user');
-  assert.equal(devices.deviceAccessToken('A'), 'access-A');
-  assert.equal(devices.deviceAccessToken('B'), 'access-B');
+  assert.deepEqual(devices.list(), [{ sn: 'A', name: '桥 A' }, { sn: 'B', name: '桥 B' }]);
 });
 
-test('renaming a device preserves its access credential', () => {
-  const storage = memoryStorage({
-    boundDevices: [{ sn: 'A', name: '旧名称', deviceAccessToken: 'access-A' }],
-    selectedDeviceSn: 'A'
-  });
-  const devices = createBoundDeviceSet(storage);
-
-  devices.rename('A', '新名称');
-
-  assert.deepEqual(devices.get('A'), {
-    sn: 'A', name: '新名称', deviceAccessToken: 'access-A'
-  });
-});
-
-test('renamed devices keep their name after the app restores from storage', () => {
-  const storage = memoryStorage({
-    boundDevices: [{ sn: 'A', name: '旧名称', deviceAccessToken: 'access-A' }],
-    selectedDeviceSn: 'A'
-  });
-  const firstSession = createBoundDeviceSet(storage);
-
-  firstSession.rename('A', '桥梁 A');
-  const restoredSession = createBoundDeviceSet(storage);
-
-  assert.equal(restoredSession.get('A').name, '桥梁 A');
-  assert.equal(restoredSession.get('A').deviceAccessToken, 'access-A');
-});
-
-test('removing the selected local device selects the next available device', () => {
+test('rename persists metadata across restoration without tokens', () => {
   const storage = memoryStorage();
   const devices = createBoundDeviceSet(storage);
-  devices.bind({ sn: 'A', deviceAccessToken: 'access-A' });
-  devices.bind({ sn: 'B', deviceAccessToken: 'access-B' });
+  devices.bind({ sn: 'A' });
+  devices.rename('A', '桥梁 A');
+  assert.deepEqual(createBoundDeviceSet(storage).get('A'), { sn: 'A', name: '桥梁 A' });
+});
 
+test('removing selected device selects another and clearing preserves login identity', () => {
+  const storage = memoryStorage({ loginToken: 'login-user' });
+  const devices = createBoundDeviceSet(storage);
+  devices.bind({ sn: 'A' }); devices.bind({ sn: 'B' });
   assert.equal(devices.remove('B'), true);
-  assert.deepEqual(devices.list(), [{ sn: 'A', name: 'A', deviceAccessToken: 'access-A' }]);
   assert.equal(devices.selectedDeviceSn(), 'A');
   assert.equal(devices.remove('missing'), false);
+  devices.clear();
+  assert.equal(devices.selectedDeviceSn(), '');
+  assert.deepEqual(devices.list(), []);
+  assert.equal(storage.snapshot().loginToken, 'login-user');
+});
+
+test('ignores invalid stale selection and duplicate cached records', () => {
+  const devices = createBoundDeviceSet(memoryStorage({
+    boundDevices: [{ sn: 'A' }, null, { sn: 'A', name: '桥 A' }], selectedDeviceSn: 'REVOKED'
+  }));
+  assert.deepEqual(devices.list(), [{ sn: 'A', name: '桥 A' }]);
+  assert.equal(devices.selectedDeviceSn(), 'A');
 });

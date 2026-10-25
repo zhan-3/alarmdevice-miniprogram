@@ -1,21 +1,8 @@
 const DEVICE_STORAGE_KEY = 'boundDevices';
 const SELECTED_DEVICE_KEY = 'selectedDeviceSn';
-const LEGACY_DEVICES_KEY = 'deviceTokens';
-const LEGACY_SELECTED_KEY = 'currentSn';
 
 function cloneDevice(device) {
-  return {
-    sn: device.sn,
-    name: device.name || device.sn,
-    deviceAccessToken: device.deviceAccessToken
-  };
-}
-
-function normalizeDevice(device) {
-  if (!device || !device.sn) return null;
-  const deviceAccessToken = device.deviceAccessToken || device.token;
-  if (!deviceAccessToken) return null;
-  return cloneDevice({ ...device, deviceAccessToken });
+  return { sn: device.sn, name: device.name || device.sn };
 }
 
 function createBoundDeviceSet(storage) {
@@ -28,46 +15,34 @@ function createBoundDeviceSet(storage) {
   }
 
   function restore() {
-    const storedDevices = storage.get(DEVICE_STORAGE_KEY, null);
-    const legacyDevices = storage.get(LEGACY_DEVICES_KEY, []);
-    const source = Array.isArray(storedDevices) ? storedDevices : legacyDevices;
-    devices = (Array.isArray(source) ? source : [])
-      .map(normalizeDevice)
-      .filter(Boolean);
-    selectedSn = storage.get(SELECTED_DEVICE_KEY, null) || storage.get(LEGACY_SELECTED_KEY, '');
-
-    if (Array.isArray(storedDevices)) {
-      persist();
-    } else if (devices.length > 0 || selectedSn) {
-      persist();
-    }
+    const stored = storage.get(DEVICE_STORAGE_KEY, null);
+    const source = Array.isArray(stored) ? stored : storage.get('deviceTokens', []);
+    devices = [...new Map((Array.isArray(source) ? source : [])
+      .filter(device => device && typeof device.sn === 'string' && device.sn)
+      .map(device => [device.sn, cloneDevice(device)])).values()];
+    const previous = storage.get(SELECTED_DEVICE_KEY, '') || storage.get('currentSn', '');
+    selectedSn = devices.some(device => device.sn === previous) ? previous : (devices[0]?.sn || '');
+    // Preserve cached metadata, but never retain legacy device credentials.
+    storage.remove('deviceTokens');
+    storage.remove('currentSn');
+    if (stored !== null || devices.length || previous) persist();
     return list();
   }
 
-  function list() {
-    return devices.map(cloneDevice);
-  }
-
+  function list() { return devices.map(cloneDevice); }
   function get(sn) {
     const device = devices.find(item => item.sn === sn);
     return device ? cloneDevice(device) : null;
   }
-
-  function deviceAccessToken(sn) {
-    const device = devices.find(item => item.sn === sn);
-    return device ? device.deviceAccessToken : '';
-  }
-
   function select(sn) {
     if (!devices.some(item => item.sn === sn)) return false;
     selectedSn = sn;
     persist();
     return true;
   }
-
   function bind(device) {
-    const normalized = normalizeDevice(device);
-    if (!normalized) throw new Error('设备必须包含 SN 和设备访问凭证');
+    if (!device || !device.sn) throw new Error('设备必须包含 SN');
+    const normalized = cloneDevice(device);
     const index = devices.findIndex(item => item.sn === normalized.sn);
     if (index >= 0) devices[index] = normalized;
     else devices.push(normalized);
@@ -75,7 +50,6 @@ function createBoundDeviceSet(storage) {
     persist();
     return cloneDevice(normalized);
   }
-
   function rename(sn, name) {
     const device = devices.find(item => item.sn === sn);
     if (!device) return false;
@@ -83,36 +57,18 @@ function createBoundDeviceSet(storage) {
     persist();
     return true;
   }
-
   function remove(sn) {
     const index = devices.findIndex(item => item.sn === sn);
     if (index < 0) return false;
     devices.splice(index, 1);
-    if (selectedSn === sn) selectedSn = devices[0] ? devices[0].sn : '';
+    if (selectedSn === sn) selectedSn = devices[0]?.sn || '';
     persist();
     return true;
   }
-
-  function clear() {
-    devices = [];
-    selectedSn = '';
-    persist();
-  }
+  function clear() { devices = []; selectedSn = ''; persist(); }
 
   restore();
-
-  return Object.freeze({
-    list,
-    get,
-    deviceAccessToken,
-    selectedDeviceSn: () => selectedSn,
-    select,
-    bind,
-    rename,
-    remove,
-    clear,
-    restore
-  });
+  return Object.freeze({ list, get, selectedDeviceSn: () => selectedSn, select, bind, rename, remove, clear, restore });
 }
 
 module.exports = { createBoundDeviceSet };

@@ -78,45 +78,20 @@ function createAuthNavigation({
     let restorationIncomplete = false;
     for (const sn of ids) {
       const existing = boundDeviceSet.get(sn);
-      let remoteDevice = {};
-      if (existing) {
-        try {
-          remoteDevice = await transport.validateDevice(existing);
-        } catch (error) {
-          if (error && error.code === 401) {
-            boundDeviceSet.remove(sn);
-            continue;
-          }
-          restorationIncomplete = true;
-          continue;
-        }
-      }
-
       try {
-        const deviceAccessToken = await transport.refreshDevice(loginToken, sn);
-        if (!deviceAccessToken) {
-          restorationIncomplete = true;
-          continue;
-        }
-        if (!existing) {
-          try {
-            remoteDevice = await transport.validateDevice({ sn, deviceAccessToken });
-          } catch (error) {
-            if (error && error.code === 401) continue;
-            restorationIncomplete = true;
-          }
-        }
+        const remoteDevice = await transport.validateDevice(loginToken, sn);
         const remoteName = remoteDevice && typeof remoteDevice.name === 'string'
-          ? remoteDevice.name.trim()
-          : '';
-        boundDeviceSet.bind({
-          sn,
-          name: remoteName || (existing ? existing.name : sn),
-          deviceAccessToken
-        });
+          ? remoteDevice.name.trim() : '';
+        boundDeviceSet.bind({ sn, name: remoteName || (existing ? existing.name : sn) });
       } catch (error) {
         if (error && error.code === 401) throw error;
+        if (error && error.code === 403) {
+          boundDeviceSet.remove(sn);
+          continue;
+        }
         restorationIncomplete = true;
+        // The device list was confirmed by the server; keep metadata on a transient failure.
+        if (!existing) boundDeviceSet.bind({ sn });
       }
     }
     if (previouslySelectedSn && boundDeviceSet.get(previouslySelectedSn)) {

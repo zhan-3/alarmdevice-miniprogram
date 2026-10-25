@@ -188,30 +188,13 @@ Page({
 
       const loginToken = getApp().getLoginToken();
 
-      // deviceSn 通过 URL 查询参数传递
-      let bindRes = await http.post(`/user/bind/device?deviceSn=${encodeURIComponent(normalizedSN)}&deviceId=${encodeURIComponent(normalizedSN)}`, {
-        deviceSn: normalizedSN,
+      const bindRes = await http.post('/user/bind/device', {
         deviceId: normalizedSN
-      }, {
-        credentialScope: 'login',
-        credential: loginToken,
-        allowDeviceRequired: true
-      });
+      }, { credentialScope: 'login', credential: loginToken });
 
-      if (bindRes.code === 1 && bindRes.data === '绑定成功') {
-        bindRes = await http.post(`/user/bind/userDeviceLogin?deviceSn=${encodeURIComponent(normalizedSN)}&deviceId=${encodeURIComponent(normalizedSN)}`, {
-          deviceSn: normalizedSN,
-          deviceId: normalizedSN
-        }, {
-          credentialScope: 'login',
-          credential: loginToken,
-          allowDeviceRequired: true
-        });
-      }
-
-      if (bindRes.code === 1 && bindRes.data && typeof bindRes.data === 'string' && !/[\u4e00-\u9fa5]/.test(bindRes.data)) {
+      if (bindRes.code === 1 && bindRes.data === normalizedSN) {
         const app = getApp();
-        app.bindDevice(normalizedSN, bindRes.data, normalizedSN);
+        app.bindDevice(normalizedSN, normalizedSN);
         app.globalData.pendingSN = '';
         succeeded = true;
 

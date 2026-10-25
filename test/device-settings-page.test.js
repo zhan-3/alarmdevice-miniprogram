@@ -58,6 +58,22 @@ function createPage(definition, data) {
   };
 }
 
+test('device name request carries deviceId and uses only user login authentication', async () => {
+  const calls = [];
+  const definition = loadSettingPage({
+    http: { async post(...args) { calls.push(args); return { code: 1 }; } },
+    logger: { error() {}, warn() {} }, wx: { toast() {} },
+    app: { renameDevice() {} }
+  });
+  const page = createPage(definition, { device: { sn: 'DEVICE-A', name: '旧名称' }, tempName: '新名称' });
+  await page.saveName();
+  assert.equal(calls[0][0], '/device/updateName');
+  assert.equal(calls[0][1].deviceId, 'DEVICE-A');
+  assert.equal(calls[0][2].credentialScope, 'login');
+  assert.equal(calls[0][2].deviceId, 'DEVICE-A');
+  assert.equal(page.data.device.name, '新名称');
+});
+
 test('device name changes only after the server accepts it', async () => {
   const toasts = [];
   const renamed = [];
@@ -66,7 +82,6 @@ test('device name changes only after the server accepts it', async () => {
     logger: { error() {}, warn() {} },
     wx: { toast(options) { toasts.push(options); } },
     app: {
-      getDeviceAccessToken: () => 'device-token',
       renameDevice: (...args) => renamed.push(args)
     }
   });
@@ -95,7 +110,7 @@ test('installation location remains unchanged when the server save fails', async
       chooseLocation(options) { picker = options; },
       toast(options) { toasts.push(options); }
     },
-    app: { getDeviceAccessToken: () => 'device-token' }
+    app: {}
   });
   const page = createPage(definition, {
     device: {

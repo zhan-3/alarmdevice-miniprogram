@@ -36,13 +36,9 @@ function transport(overrides = {}) {
       calls.push(['listBoundDevices', credential]);
       return [];
     },
-    async validateDevice(device) {
-      calls.push(['validateDevice', device.sn, device.deviceAccessToken]);
+    async validateDevice(credential, sn) {
+      calls.push(['validateDevice', credential, sn]);
       return {};
-    },
-    async refreshDevice(credential, sn) {
-      calls.push(['refreshDevice', credential, sn]);
-      return `fresh-${sn}`;
     },
     ...overrides
   };
@@ -82,9 +78,9 @@ test('valid cached login restores profile, phone eligibility, valid devices, and
       this.calls.push(['listBoundDevices', credential]);
       return ['A', 'B'];
     },
-    async validateDevice(device) {
-      this.calls.push(['validateDevice', device.sn, device.deviceAccessToken]);
-      return { name: device.sn === 'A' ? '服务端桥 A' : '服务端桥 B' };
+    async validateDevice(credential, sn) {
+      this.calls.push(['validateDevice', credential, sn]);
+      return { name: sn === 'A' ? '服务端桥 A' : '服务端桥 B' };
     }
   });
   const harness = createHarness({
@@ -109,8 +105,8 @@ test('valid cached login restores profile, phone eligibility, valid devices, and
     restorationIncomplete: false
   });
   assert.deepEqual(harness.storage.snapshot().boundDevices, [
-    { sn: 'A', name: '服务端桥 A', deviceAccessToken: 'fresh-A' },
-    { sn: 'B', name: '服务端桥 B', deviceAccessToken: 'fresh-B' }
+    { sn: 'A', name: '服务端桥 A' },
+    { sn: 'B', name: '服务端桥 B' }
   ]);
   assert.equal(harness.storage.snapshot().selectedDeviceSn, 'A');
   assert.deepEqual(harness.navigation.calls(), [['reLaunch', '/pages/home/home?from=login']]);
@@ -152,7 +148,7 @@ test('login validation network failure is retryable and preserves all local auth
   const outcome = await harness.auth.restore({ target: '/pages/home/home' });
 
   assert.equal(outcome.type, 'retryable-error');
-  assert.deepEqual(harness.storage.snapshot(), stored);
+  assert.deepEqual(harness.storage.snapshot(), { ...stored, boundDevices: [{ sn: 'A', name: '桥 A' }] });
   assert.deepEqual(harness.navigation.calls(), []);
 });
 
@@ -189,15 +185,15 @@ test('login credential 401 clears login state, profile, and the complete bound-d
   ]]);
 });
 
-test('device credential 401 removes only that device and preserves login plus other devices', async () => {
+test('device authorization 403 removes only that device and preserves login plus other devices', async () => {
   const authTransport = transport({
     async listBoundDevices(credential) {
       this.calls.push(['listBoundDevices', credential]);
       return ['A', 'B'];
     },
-    async validateDevice(device) {
-      this.calls.push(['validateDevice', device.sn, device.deviceAccessToken]);
-      if (device.sn === 'A') throw { code: 401 };
+    async validateDevice(credential, sn) {
+      this.calls.push(['validateDevice', credential, sn]);
+      if (sn === 'A') throw { code: 403 };
       return {};
     }
   });
@@ -218,9 +214,9 @@ test('device credential 401 removes only that device and preserves login plus ot
   assert.equal(outcome.type, 'ready');
   assert.equal(harness.storage.snapshot().loginToken, 'login-user');
   assert.deepEqual(harness.storage.snapshot().boundDevices, [
-    { sn: 'B', name: '桥 B', deviceAccessToken: 'fresh-B' }
+    { sn: 'B', name: '桥 B' }
   ]);
-  assert.equal(authTransport.calls.some(call => call[0] === 'refreshDevice' && call[2] === 'A'), false);
+  assert.equal(authTransport.calls.some(call => call[0] === 'refreshDevice'), false);
 });
 
 test('device network failure preserves that device and reports incomplete restoration', async () => {
@@ -229,8 +225,8 @@ test('device network failure preserves that device and reports incomplete restor
       this.calls.push(['listBoundDevices', credential]);
       return ['A'];
     },
-    async validateDevice(device) {
-      this.calls.push(['validateDevice', device.sn, device.deviceAccessToken]);
+    async validateDevice(credential, sn) {
+      this.calls.push(['validateDevice', credential, sn]);
       throw { code: -1, msg: 'timeout' };
     }
   });
@@ -247,9 +243,7 @@ test('device network failure preserves that device and reports incomplete restor
 
   assert.equal(outcome.type, 'ready');
   assert.equal(outcome.restorationIncomplete, true);
-  assert.deepEqual(harness.storage.snapshot().boundDevices, [
-    { sn: 'A', name: '桥 A', deviceAccessToken: 'old-A' }
-  ]);
+  assert.deepEqual(harness.storage.snapshot().boundDevices, [{ sn: 'A', name: '桥 A' }]);
 });
 
 test('concurrent restore calls share one login validation and bound-device restoration operation', async () => {
@@ -342,6 +336,29 @@ test('explicit login invalidation clears state and applies the login navigation 
 
   assert.equal('loginToken' in harness.storage.snapshot(), false);
   assert.deepEqual(harness.navigation.calls(), [['reLaunch', '/pages/login/login']]);
+});
+
+test('401 during device restoration invalidates the single user credential and all devices', async () => {
+  const harness = createHarness({
+    stored: { loginToken: 'expired-user', boundDevices: [{ sn: 'A', name: '桥 A' }] },
+    transport: transport({
+      async listBoundDevices() { return ['A']; },
+      async validateDevice() { throw { code: 401 }; }
+    })
+  });
+  assert.equal((await harness.auth.restore()).type, 'login-required');
+  assert.equal('loginToken' in harness.storage.snapshot(), false);
+  assert.deepEqual(harness.storage.snapshot().boundDevices, []);
+});
+
+test('device invalidation changes selection but preserves the single user credential', () => {
+  const harness = createHarness({ stored: {
+    loginToken: 'login-user', boundDevices: [{ sn: 'A' }, { sn: 'B' }], selectedDeviceSn: 'A'
+  } });
+  harness.auth.invalidate({ type: 'device', sn: 'A' });
+  assert.equal(harness.storage.snapshot().loginToken, 'login-user');
+  assert.equal(harness.storage.snapshot().selectedDeviceSn, 'B');
+  assert.deepEqual(harness.storage.snapshot().boundDevices, [{ sn: 'B', name: 'B' }]);
 });
 
 test('restore without a credential returns login-required and preserves a safe intended target', async () => {

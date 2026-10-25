@@ -19,7 +19,6 @@ Page({
     swipeOffset: 0,
     touchStartX: 0,
     currentSn: '',
-    currentDeviceAccessToken: '',
     loadError: false,
     savingName: false,
     savingContact: false,
@@ -33,12 +32,7 @@ Page({
       if (deviceEntry) {
         app.selectDevice(options.id);
       }
-      const authToken = deviceEntry ? deviceEntry.deviceAccessToken : '';
-
-      this.setData({
-        currentSn: options.id,
-        currentDeviceAccessToken: authToken
-      });
+      this.setData({ currentSn: options.id });
     }
     this.loadDeviceFromAPI();
   },
@@ -61,7 +55,7 @@ Page({
     const requestVersion = this.detailRequests.begin();
     const currentSn = this.data.currentSn;
     const app = getApp();
-    const authToken = app.getDeviceAccessToken(currentSn) || this.data.currentDeviceAccessToken;
+    const authToken = app.getLoginToken();
 
     if (!currentSn || !authToken) {
       this.setData({ isLoading: false, loadError: true });
@@ -76,7 +70,7 @@ Page({
     } catch (err) {
       if (!this.detailRequests.isCurrent(requestVersion)) return;
       logger.error('加载设备详情失败', { error: err });
-      this.setData({ loadError: true });
+      this.setData({ loadError: true, device: null, markers: [] });
     } finally {
       if (this.detailRequests.isCurrent(requestVersion)) {
         this.setData({ isLoading: false });
@@ -116,12 +110,11 @@ Page({
     this.setData({ savingName: true });
     try {
       await http.post('/device/updateName', {
-        deviceSn: currentSn,
+        deviceId: currentSn,
         name: newName
       }, {
-        credentialScope: 'device',
-        credential: app.getDeviceAccessToken(currentSn) || this.data.currentDeviceAccessToken,
-        deviceSn: currentSn
+        credentialScope: 'login',
+        deviceId: currentSn
       });
       app.renameDevice(currentSn, newName);
       this.setData({
@@ -180,15 +173,12 @@ Page({
     this.setData({ savingContact: true });
     try {
       wx.showLoading({ title: '添加中...', mask: true });
-      const authToken = getApp().getDeviceAccessToken(this.data.currentSn) || this.data.currentDeviceAccessToken;
-
       const res = await http.post(
-        `/user/addPhoneNumber?number=${encodeURIComponent(tempContactPhone)}&name=${encodeURIComponent(tempContactName)}`,
+        `/user/addPhoneNumber?deviceId=${encodeURIComponent(this.data.currentSn)}&number=${encodeURIComponent(tempContactPhone)}&name=${encodeURIComponent(tempContactName)}`,
         {},
         {
-          credentialScope: 'device',
-          credential: authToken,
-          deviceSn: this.data.currentSn
+          credentialScope: 'login',
+          deviceId: this.data.currentSn
         }
       );
 
@@ -232,12 +222,9 @@ Page({
     this.setData({ deletingContactId: contactId });
     try {
       wx.showLoading({ title: '删除中...', mask: true });
-      const authToken = getApp().getDeviceAccessToken(this.data.currentSn) || this.data.currentDeviceAccessToken;
-
-      const delRes = await http.delete(`/user/deletePhone?number=${encodeURIComponent(contact.phone)}`, {}, {
-        credentialScope: 'device',
-        credential: authToken,
-        deviceSn: this.data.currentSn
+      const delRes = await http.delete(`/user/deletePhone?deviceId=${encodeURIComponent(this.data.currentSn)}&number=${encodeURIComponent(contact.phone)}`, {}, {
+        credentialScope: 'login',
+        deviceId: this.data.currentSn
       });
 
       wx.hideLoading();

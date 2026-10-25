@@ -8,29 +8,29 @@ const { loadDeviceDetailsConcurrently } = require('./deviceDetailsLoader');
 
 async function loadDeviceStatus(deviceId, authToken) {
   try {
-    const bindRes = await http.get('/user/bind/status', { deviceSn: deviceId }, {
-      credentialScope: 'device',
+    const bindRes = await http.get('/user/bind/status', { deviceId }, {
+      credentialScope: 'login',
       credential: authToken,
-      deviceSn: deviceId
+      deviceId
     });
     return bindRes.code === 1 && bindRes.data ? bindRes.data : null;
   } catch (err) {
     logger.error('获取设备绑定状态失败', { deviceId, error: err });
-    return null;
+    throw err;
   }
 }
 
 async function requestDeviceLocation(endpoint, deviceId, authToken) {
   try {
-    const locRes = await http.get(endpoint, { deviceSn: deviceId }, {
-      credentialScope: 'device',
+    const locRes = await http.get(endpoint, { deviceId }, {
+      credentialScope: 'login',
       credential: authToken,
-      deviceSn: deviceId
+      deviceId
     });
     return locRes.code === 1 && locRes.data ? locRes.data : null;
   } catch (err) {
     logger.error('获取设备位置失败', { deviceId, endpoint, error: err });
-    return null;
+    throw err;
   }
 }
 
@@ -101,10 +101,10 @@ export async function loadDeviceData(deviceId, authToken) {
 
 export async function loadDeviceContacts(authToken, deviceId) {
   try {
-    const phoneRes = await http.get('/user/userGetPhone', { deviceSn: deviceId }, {
-      credentialScope: 'device',
+    const phoneRes = await http.get('/user/userGetPhone', { deviceId }, {
+      credentialScope: 'login',
       credential: authToken,
-      deviceSn: deviceId
+      deviceId
     });
     if (phoneRes.code === 1 && Array.isArray(phoneRes.data)) {
       const nameCache = getStorage('contactNameCache') || {};
@@ -119,6 +119,7 @@ export async function loadDeviceContacts(authToken, deviceId) {
     }
   } catch (err) {
     logger.error('获取设备联系人失败', { deviceId, error: err });
+    throw err;
   }
   return [];
 }

@@ -11,10 +11,9 @@ function isValidToken(token) {
   return !/[\u4e00-\u9fa5]/.test(token)
 }
 
-function invalidateCredential(scope, deviceSn) {
+function invalidateCredential() {
   const app = getApp()
-  if (!app.authNavigation) return
-  app.authNavigation.invalidate(scope === 'device' ? { type: 'device', sn: deviceSn } : 'login')
+  if (app.authNavigation) app.authNavigation.invalidate('login')
 }
 
 function request({
@@ -24,7 +23,7 @@ function request({
   headers = {},
   credentialScope = 'none',
   credential = '',
-  deviceSn = '',
+  deviceId = '',
   invalidateOn401 = true,
   allowDeviceRequired = false,
   retryCount = 0
@@ -35,12 +34,12 @@ function request({
     // 日志只记录接口路径，避免查询参数中的手机号等隐私数据泄露。
     const requestPath = String(url).split('?')[0]
     const app = getApp()
-    const authCredential = credential || (credentialScope === 'login' ? app.getLoginToken() : '')
+    const authCredential = credential || (credentialScope !== 'none' ? app.getLoginToken() : '')
     logger.info('请求开始', { requestId, method, url: requestPath, credentialScope })
 
     if (credentialScope !== 'none' && !isValidToken(authCredential)) {
       logger.error('凭证格式无效', { requestId, url: requestPath, credentialScope })
-      if (invalidateOn401) invalidateCredential(credentialScope, deviceSn)
+      if (invalidateOn401) invalidateCredential()
       reject({ code: 401, msg: '无效token', credentialScope })
       return
     }
@@ -67,14 +66,17 @@ function request({
             credentialScope,
             durationMs: Date.now() - startedAt
           })
-          if (invalidateOn401) invalidateCredential(credentialScope, deviceSn)
+          if (invalidateOn401) invalidateCredential()
           reject({ code: 401, msg: '请提供有效的token', credentialScope })
           return
         }
 
         if (authResponse.type === 'device-required') {
           logger.warn('请求缺少设备权限', { requestId, url: requestPath, statusCode, durationMs: Date.now() - startedAt })
-          reject({ code: 403, msg: '请先绑定设备' })
+          if (deviceId && invalidateOn401 && app.authNavigation) {
+            app.authNavigation.invalidate({ type: 'device', sn: deviceId })
+          }
+          reject({ code: 403, msg: (responseData && (responseData.msg || responseData.message)) || '设备访问权限已失效' })
           return
         }
 
@@ -130,7 +132,7 @@ function request({
               headers,
               credentialScope,
               credential,
-              deviceSn,
+              deviceId,
               invalidateOn401,
               allowDeviceRequired,
               retryCount: retryCount + 1
