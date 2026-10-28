@@ -40,6 +40,7 @@ function createPhoneVerificationWorkflow({
   let state = initialState();
   let countdownTimer = null;
   let disposed = false;
+  let phoneRevision = 0;
 
   function snapshot() {
     return Object.freeze({ ...state });
@@ -75,8 +76,11 @@ function createPhoneVerificationWorkflow({
 
   function changePhone(value) {
     const phone = String(value || '');
+    const changed = phone !== state.phone;
+    if (changed) phoneRevision += 1;
     publish({
       phone,
+      code: changed ? '' : state.code,
       phoneInvalid: phone.length > 0 && !PHONE_REGEX.test(phone),
       message: ''
     });
@@ -87,6 +91,7 @@ function createPhoneVerificationWorkflow({
   }
 
   async function send() {
+    if (disposed) return { status: 'disposed' };
     if (state.sending || state.confirming || state.retryAfterSeconds > 0) {
       return { status: 'suppressed' };
     }
@@ -95,15 +100,20 @@ function createPhoneVerificationWorkflow({
       return { status: 'invalid-phone' };
     }
 
+    const phone = state.phone;
+    const revision = phoneRevision;
     publish({ sending: true, message: '' });
     try {
-      await transport.send(state.phone);
+      await transport.send(phone);
       if (disposed) return { status: 'disposed' };
+      // 真正发出的短信仍需保留冷却，不能通过改号码绕过。
       startCountdown();
-      return { status: 'sent' };
+      return { status: revision === phoneRevision ? 'sent' : 'stale' };
     } catch (error) {
+      if (disposed) return { status: 'disposed' };
+      if (revision !== phoneRevision) return { status: 'stale' };
       logger.error('发送手机验证码失败', { error });
-      publish({ message: error && error.userNotified ? '' : ((error && error.msg) || '验证码发送失败，请重试') });
+      publish({ message: (error && error.msg) || '验证码发送失败，请重试' });
       return { status: 'failed' };
     } finally {
       publish({ sending: false });
@@ -111,6 +121,7 @@ function createPhoneVerificationWorkflow({
   }
 
   async function confirm() {
+    if (disposed) return { status: 'disposed' };
     if (state.confirming || state.sending) return { status: 'suppressed' };
     if (!PHONE_REGEX.test(state.phone)) {
       publish({ phoneInvalid: true, message: '请输入正确的11位手机号' });
@@ -123,14 +134,19 @@ function createPhoneVerificationWorkflow({
 
     const phone = state.phone;
     const code = state.code;
+    const revision = phoneRevision;
     publish({ confirming: true, message: '' });
     try {
       await transport.confirm(phone, code);
+      if (disposed) return { status: 'disposed' };
+      if (revision !== phoneRevision) return { status: 'stale' };
       saveVerifiedPhone(phone);
       return { status: 'verified', phone };
     } catch (error) {
+      if (disposed) return { status: 'disposed' };
+      if (revision !== phoneRevision) return { status: 'stale' };
       logger.error('验证手机号失败', { error });
-      publish({ message: error && error.userNotified ? '' : ((error && error.msg) || '验证失败，请重试') });
+      publish({ message: (error && error.msg) || '验证失败，请重试' });
       return { status: 'failed' };
     } finally {
       publish({ confirming: false });
@@ -138,7 +154,13 @@ function createPhoneVerificationWorkflow({
   }
 
   function reset() {
-    publish({ ...initialState(), retryAfterSeconds: state.retryAfterSeconds });
+    phoneRevision += 1;
+    publish({
+      ...initialState(),
+      sending: state.sending,
+      confirming: state.confirming,
+      retryAfterSeconds: state.retryAfterSeconds
+    });
   }
 
   function dispose() {

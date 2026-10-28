@@ -2,11 +2,26 @@
   <scroll-view class="setting-scroll" scroll-y>
     <!-- 账号信息（仅主页进入时展示） -->
     <white-card wx:if="{{!isDeviceSetting}}" title="账号信息" titleIcon="user-round" customClass="setting-module-card">
-      <view class="account-summary">
-        <text class="account-label">绑定手机号</text>
-        <text wx:if="{{userInfo.phone}}" class="account-value">{{userInfo.phone}}</text>
-        <text wx:else class="phone-unbind">未绑定手机号</text>
+      <view wx:if="{{profileLoading}}" class="account-feedback">正在读取账号信息…</view>
+      <view wx:elif="{{profileError}}" class="account-feedback">
+        <text>{{profileError}}</text>
+        <button class="account-retry" bindtap="loadAccountProfile">重新加载</button>
       </view>
+      <block wx:elif="{{profileReady}}">
+        <view class="account-summary">
+          <text class="account-label">绑定手机号</text>
+          <text wx:if="{{userInfo.phone}}" class="account-value">{{userInfo.phone}}</text>
+          <text wx:else class="phone-unbind">未绑定手机号</text>
+        </view>
+        <view class="account-summary nickname-row">
+          <text class="account-label">账号昵称</text>
+          <button class="nickname-entry" bindtap="editNickname" aria-label="编辑账号昵称">
+            <text class="nickname-value">{{userInfo.nickName || '未设置'}}</text>
+            <app-icon name="pencil" size="16" />
+          </button>
+        </view>
+        <text class="nickname-note">昵称用于共同设备的联系人和处理历史，有权查看这些信息的用户可见。可不填写。</text>
+      </block>
     </white-card>
 
     <view wx:if="{{isDeviceSetting && deviceLoading}}" class="loading-screen">
@@ -78,6 +93,20 @@
       <text class="logout-hint">退出后不会删除服务器上的报警记录</text>
     </view>
   </scroll-view>
+</view>
+
+<view class="modal-mask" wx:if="{{showNicknameModal}}" bindtap="closeNicknameModal"></view>
+<view class="modal-container" wx:if="{{showNicknameModal}}">
+  <view class="modal-title">修改账号昵称</view>
+  <view class="modal-form">
+    <input class="modal-input" type="text" value="{{tempNickname}}" maxlength="20" placeholder="选填，最多20个字符" disabled="{{savingNickname}}" bindinput="onNicknameInput" aria-label="账号昵称，选填" />
+    <text class="nickname-note">留空时，联系人优先显示设备共享称呼，再显示脱敏手机号；处理历史使用脱敏手机号兜底，无手机号则显示未命名用户。</text>
+    <text wx:if="{{nicknameError}}" class="nickname-error" aria-role="alert">{{nicknameError}}</text>
+  </view>
+  <view class="modal-btn-group">
+    <button class="modal-btn cancel" disabled="{{savingNickname}}" bindtap="closeNicknameModal">取消</button>
+    <button class="modal-btn confirm {{savingNickname ? 'btn-disabled' : ''}}" disabled="{{savingNickname}}" bindtap="saveNickname">{{savingNickname ? '保存中…' : '保存'}}</button>
+  </view>
 </view>
 
 <view class="modal-mask" wx:if="{{showEditNameModal}}" bindtap="closeEditNameModal"></view>

@@ -137,6 +137,32 @@
   line-height: 1.5;
 }
 
+.contact-field-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.contact-refresh-state {
+  margin: 10px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.contact-retry {
+  min-height: 44px;
+  margin-top: 10px;
+  border: 1rpx solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--orange-light);
+  color: var(--orange-dark);
+  font-size: 13px;
+  line-height: 44px;
+}
+
 .compact-info {
   display: flex;
   justify-content: space-between;

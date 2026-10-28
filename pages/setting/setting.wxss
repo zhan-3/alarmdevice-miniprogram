@@ -34,6 +34,68 @@ page {
   color: var(--text-secondary);
 }
 
+.nickname-row {
+  border-top: 1rpx solid var(--border-color);
+}
+
+.nickname-entry {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 70%;
+  margin: 0;
+  padding: 0 4px 0 12px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--orange-dark);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.nickname-entry:active {
+  background: var(--orange-light);
+}
+
+.nickname-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nickname-note {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.nickname-error {
+  display: block;
+  margin-top: 10px;
+  color: var(--status-alarm-color);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.account-feedback {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.account-retry {
+  min-height: 44px;
+  margin-top: 10px;
+  background: var(--orange-light);
+  color: var(--orange-dark);
+  font-size: 14px;
+  line-height: 44px;
+}
+
 .btn-disabled {
   background: #ccc !important;
   pointer-events: none;

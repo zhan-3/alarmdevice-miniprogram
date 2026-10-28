@@ -1,6 +1,6 @@
 import http from '../../utils/http';
-import { getStorage, setStorage } from '../../utils/storage';
-import { loadDeviceDetails } from '../../utils/deviceService';
+import { getStorage } from '../../utils/storage';
+import { loadDeviceDetails, loadDeviceContacts } from '../../utils/deviceService';
 const { createRequestVersion } = require('../../utils/requestVersion');
 import { DEVICE_STATUS_MAP } from '../../utils/constants';
 import logger from '../../utils/logger';
@@ -23,6 +23,9 @@ Page({
     loadError: false,
     savingName: false,
     savingContact: false,
+    contactsRefreshing: false,
+    contactRefreshError: '',
+    contactSaveError: '',
     deletingContactId: ''
   },
 
@@ -39,24 +42,66 @@ Page({
   },
 
   onShow() {
-    // 从子页面返回时刷新数据（如设置页修改了设备名）。
-    if (this.data.device) {
-      this.loadDeviceFromAPI();
-    }
+    this.pageHidden = false;
+    // 返回时重新读取，联系人显示名可能已被本人更新。
+    if (this.data.device || this.pageWasHidden) this.loadDeviceFromAPI();
+    this.pageWasHidden = false;
+  },
+
+  invalidateContactRequests() {
+    this.contactGeneration = (this.contactGeneration || 0) + 1;
+    if (this.detailRequests) this.detailRequests.begin();
+  },
+
+  onHide() {
+    this.pageHidden = true;
+    this.pageWasHidden = true;
+    this.invalidateContactRequests();
+    this.setData({
+      device: null, markers: [], showAddContactModal: false,
+      tempContactName: '', tempContactPhone: '', contactPhoneError: '', contactSaveError: '',
+      savingContact: false, contactsRefreshing: false, deletingContactId: ''
+    });
   },
 
   onUnload() {
-    // 使尚未返回的请求失效，避免卸载后继续 setData。
-    if (this.detailRequests) this.detailRequests.begin();
+    this.pageHidden = true;
+    this.invalidateContactRequests();
+  },
+
+  captureContactScope() {
+    return {
+      token: getApp().getLoginToken(),
+      deviceId: this.data.currentSn,
+      generation: this.contactGeneration || 0
+    };
+  },
+
+  isContactScopeCurrent(scope) {
+    return !this.pageHidden && Boolean(scope.token && scope.deviceId) &&
+      scope.generation === (this.contactGeneration || 0) &&
+      scope.deviceId === this.data.currentSn && scope.token === getApp().getLoginToken();
+  },
+
+  handleContactAccessError(error, scope) {
+    if (!this.isContactScopeCurrent(scope)) return;
+    if (error && error.code === 401) {
+      getApp().authNavigation.invalidate('login');
+    } else if (error && error.code === 403) {
+      getApp().authNavigation.invalidate({ type: 'device', sn: scope.deviceId });
+      this.setData({ device: null, markers: [], loadError: true, showAddContactModal: false });
+    }
   },
 
   // 从后端API并行加载设备状态、位置和联系人。
   async loadDeviceFromAPI() {
+    if (this.data.savingContact || this.data.contactsRefreshing || this.data.deletingContactId) return;
     if (!this.detailRequests) this.detailRequests = createRequestVersion();
     const requestVersion = this.detailRequests.begin();
     const currentSn = this.data.currentSn;
     const app = getApp();
     const authToken = app.getLoginToken();
+    const scope = this.captureContactScope();
 
     if (!currentSn || !authToken) {
       this.setData({ isLoading: false, loadError: true });
@@ -65,15 +110,20 @@ Page({
 
     this.setData({ isLoading: true, loadError: false });
     try {
-      const { device, markers } = await loadDeviceDetails(currentSn, authToken);
-      if (!this.detailRequests.isCurrent(requestVersion) || currentSn !== this.data.currentSn) return;
-      this.setData({ device, markers });
+      const { device, markers } = await loadDeviceDetails(currentSn, authToken, {
+        invalidateOn401: false,
+        isCurrent: () => this.detailRequests.isCurrent(requestVersion) && this.isContactScopeCurrent(scope)
+      });
+      if (!this.detailRequests.isCurrent(requestVersion) || !this.isContactScopeCurrent(scope)) return;
+      this.contactAdditionPending = false;
+      this.setData({ device, markers, contactRefreshError: '' });
     } catch (err) {
-      if (!this.detailRequests.isCurrent(requestVersion)) return;
+      if (!this.detailRequests.isCurrent(requestVersion) || !this.isContactScopeCurrent(scope)) return;
       logger.error('加载设备详情失败', { error: err });
       this.setData({ loadError: true, device: null, markers: [] });
+      this.handleContactAccessError(err, scope);
     } finally {
-      if (this.detailRequests.isCurrent(requestVersion)) {
+      if (this.detailRequests.isCurrent(requestVersion) && this.isContactScopeCurrent(scope)) {
         this.setData({ isLoading: false });
       }
     }
@@ -135,20 +185,27 @@ Page({
   },
 
   showAddContact() {
+    if (this.data.savingContact || this.data.contactsRefreshing || this.data.deletingContactId) return;
+    if (this.contactAdditionPending || this.data.contactRefreshError) {
+      wx.toast({ title: '请先重新加载联系人列表', icon: 'none' });
+      return;
+    }
     this.setData({
       showAddContactModal: true,
       tempContactName: '',
       tempContactPhone: '',
-      contactPhoneError: ''
+      contactPhoneError: '',
+      contactSaveError: ''
     });
   },
 
   closeAddContactModal() {
-    this.setData({ showAddContactModal: false, tempContactName: '', tempContactPhone: '', contactPhoneError: '' });
+    if (this.data.savingContact) return;
+    this.setData({ showAddContactModal: false, tempContactName: '', tempContactPhone: '', contactPhoneError: '', contactSaveError: '' });
   },
 
   onContactNameInput(e) {
-    this.setData({ tempContactName: e.detail.value.trim() });
+    this.setData({ tempContactName: e.detail.value, contactSaveError: '' });
   },
 
   isOwnContactPhone(phone) {
@@ -162,99 +219,115 @@ Page({
     const phone = e.detail.value.trim();
     this.setData({
       tempContactPhone: phone,
-      contactPhoneError: this.isOwnContactPhone(phone) ? '你已默认接收报警，无需添加自己' : ''
+      contactPhoneError: this.isOwnContactPhone(phone) ? '你已默认接收报警，无需添加自己' : '',
+      contactSaveError: ''
     });
   },
 
+  async refreshContacts(scope = this.captureContactScope(), afterAdd = false) {
+    if (!this.isContactScopeCurrent(scope) || this.data.contactsRefreshing || !this.data.device) return;
+    this.setData({ contactsRefreshing: true });
+    try {
+      const contacts = await loadDeviceContacts(scope.token, scope.deviceId, { invalidateOn401: false });
+      if (!this.isContactScopeCurrent(scope) || !this.data.device) return;
+      this.contactAdditionPending = false;
+      this.setData({ 'device.contacts': contacts, contactRefreshError: '', swipeId: null, swipeOffset: 0 });
+      if (afterAdd) wx.toast({ title: '联系人已添加', icon: 'success' });
+    } catch (error) {
+      if (!this.isContactScopeCurrent(scope)) return;
+      this.setData({ contactRefreshError: this.contactAdditionPending
+        ? '联系人已添加，但列表刷新失败。请重新加载，无需再次添加。'
+        : '联系人列表刷新失败，请重新加载。' });
+      this.handleContactAccessError(error, scope);
+    } finally {
+      if (this.isContactScopeCurrent(scope)) this.setData({ contactsRefreshing: false });
+    }
+  },
+
+  retryContacts() {
+    if (this.data.savingContact || this.data.deletingContactId) return;
+    return this.refreshContacts();
+  },
+
   async saveContact() {
-    if (this.data.savingContact) return;
-    const { tempContactName, tempContactPhone, device } = this.data;
+    if (this.data.savingContact || this.data.contactsRefreshing || this.data.deletingContactId ||
+      this.contactAdditionPending || this.data.contactRefreshError || !this.data.device) return;
+    const { tempContactPhone, device } = this.data;
+    const name = String(this.data.tempContactName || '').trim();
     if (this.isOwnContactPhone(tempContactPhone)) {
       this.setData({ contactPhoneError: '你已默认接收报警，无需添加自己' });
       return;
     }
-    if (!tempContactName) {
-      wx.toast({ title: '请输入联系人姓名', icon: 'none' });
+    if (name.length > 20) {
+      this.setData({ contactSaveError: '联系人称呼最多20个字符' });
       return;
     }
     const phoneReg = /^1[3-9]\d{9}$/;
     if (!phoneReg.test(tempContactPhone)) {
-      wx.toast({ title: '请输入正确的11位手机号', icon: 'none' });
+      this.setData({ contactPhoneError: '请输入正确的11位手机号' });
       return;
     }
     if (device.contacts.some(c => c.phone === tempContactPhone)) {
-      wx.toast({ title: '该手机号已添加', icon: 'none' });
+      this.setData({ contactPhoneError: '该手机号已添加' });
       return;
     }
-
-    this.setData({ savingContact: true });
+    const scope = this.captureContactScope();
+    if (!this.isContactScopeCurrent(scope)) return;
+    // 废弃添加前发起的整页读取，避免旧列表晚到覆盖权威刷新结果。
+    if (this.detailRequests) this.detailRequests.begin();
+    this.setData({ savingContact: true, isLoading: false, contactSaveError: '' });
     try {
-      wx.showLoading({ title: '添加中...', mask: true });
       const res = await http.post(
-        `/user/addPhoneNumber?deviceId=${encodeURIComponent(this.data.currentSn)}&number=${encodeURIComponent(tempContactPhone)}&name=${encodeURIComponent(tempContactName)}`,
+        `/user/addPhoneNumber?deviceId=${encodeURIComponent(scope.deviceId)}&number=${encodeURIComponent(tempContactPhone)}&name=${encodeURIComponent(name)}`,
         {},
-        {
-          credentialScope: 'login',
-          deviceId: this.data.currentSn
-        }
+        { credentialScope: 'login', credential: scope.token, deviceId: scope.deviceId, invalidateOn401: false }
       );
-
-      wx.hideLoading();
-      if (res.code === 1) {
-        // 本地缓存姓名，后端不返时回退用
-        const nameCache = getStorage('contactNameCache') || {};
-        nameCache[tempContactPhone] = tempContactName;
-        setStorage('contactNameCache', nameCache);
-
-        const newContact = {
-          id: 'c' + Date.now(),
-          name: tempContactName,
-          phone: tempContactPhone
-        };
-        this.setData({
-          'device.contacts': [...device.contacts, newContact],
-          showAddContactModal: false,
-          tempContactName: '',
-          tempContactPhone: ''
-        });
-        wx.toast({ title: '添加成功', icon: 'success' });
-      }
-    } catch (err) {
-      logger.error('添加联系人失败', { error: err });
+      if (!this.isContactScopeCurrent(scope)) return;
+      if (res.code !== 1) throw res;
+      this.contactAdditionPending = true;
+      this.setData({ showAddContactModal: false, tempContactName: '', tempContactPhone: '', contactPhoneError: '' });
+      await this.refreshContacts(scope, true);
+    } catch (error) {
+      if (!this.isContactScopeCurrent(scope)) return;
+      logger.error('添加联系人失败', { error });
+      this.setData({ contactSaveError: (error && error.msg) || '添加失败，请重试' });
+      this.handleContactAccessError(error, scope);
     } finally {
-      wx.hideLoading();
-      this.setData({ savingContact: false });
+      if (this.isContactScopeCurrent(scope)) this.setData({ savingContact: false });
     }
   },
 
   async deleteContact(e) {
     const contactId = e.currentTarget.dataset.id;
-    if (this.data.deletingContactId) return;
+    if (this.data.deletingContactId || this.data.savingContact || this.data.contactsRefreshing ||
+      this.data.contactRefreshError || !this.data.device) return;
     const contact = this.data.device.contacts.find(c => c.id === contactId);
     if (!contact) return;
-
+    const scope = this.captureContactScope();
+    if (!this.isContactScopeCurrent(scope)) return;
     const confirmed = await wx.modal({ content: '确定要删除该联系人吗？' });
-    if (!confirmed) return;
+    if (!confirmed || !this.isContactScopeCurrent(scope) || this.data.deletingContactId ||
+      this.data.savingContact || this.data.contactsRefreshing) return;
 
-    this.setData({ deletingContactId: contactId });
+    if (this.detailRequests) this.detailRequests.begin();
+    this.setData({ deletingContactId: contactId, isLoading: false });
     try {
-      wx.showLoading({ title: '删除中...', mask: true });
-      const delRes = await http.delete(`/user/deletePhone?deviceId=${encodeURIComponent(this.data.currentSn)}&number=${encodeURIComponent(contact.phone)}`, {}, {
-        credentialScope: 'login',
-        deviceId: this.data.currentSn
+      const delRes = await http.delete(`/user/deletePhone?deviceId=${encodeURIComponent(scope.deviceId)}&number=${encodeURIComponent(contact.phone)}`, {}, {
+        credentialScope: 'login', credential: scope.token, deviceId: scope.deviceId, invalidateOn401: false
       });
-
-      wx.hideLoading();
+      if (!this.isContactScopeCurrent(scope) || !this.data.device) return;
       if (delRes.code === 1) {
-        const contacts = this.data.device.contacts.filter(c => c.id !== contactId);
-        this.setData({ 'device.contacts': contacts });
+        const contacts = this.data.device.contacts.filter(c => c.phone !== contact.phone);
+        this.setData({ 'device.contacts': contacts, swipeId: null, swipeOffset: 0 });
         wx.toast({ title: '删除成功', icon: 'success' });
       }
-    } catch (err) {
-      logger.error('删除联系人失败', { error: err });
+    } catch (error) {
+      if (!this.isContactScopeCurrent(scope)) return;
+      logger.error('删除联系人失败', { error });
+      this.handleContactAccessError(error, scope);
+      if (!error || !error.userNotified) wx.toast({ title: '删除失败，请重试', icon: 'none' });
     } finally {
-      wx.hideLoading();
-      this.setData({ deletingContactId: '' });
+      if (this.isContactScopeCurrent(scope)) this.setData({ deletingContactId: '' });
     }
   },
 

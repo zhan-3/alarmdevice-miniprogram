@@ -1,10 +1,17 @@
 import { loadDeviceData, buildMarkers } from '../../utils/deviceService';
 import http from '../../utils/http';
-import { getStorage } from '../../utils/storage';
+import { getStorage, setStorage } from '../../utils/storage';
 import logger from '../../utils/logger';
 Page({
   data: {
     userInfo: {},
+    profileLoading: false,
+    profileReady: false,
+    profileError: '',
+    showNicknameModal: false,
+    tempNickname: '',
+    savingNickname: false,
+    nicknameError: '',
     isDeviceSetting: false,
     deviceLoading: false,
     deviceLoadError: false,
@@ -27,9 +34,123 @@ Page({
     }
   },
 
+  onShow() {
+    this.profileHidden = false;
+    if (!this.data.isDeviceSetting) return this.loadAccountProfile();
+  },
+
+  onHide() {
+    this.profileHidden = true;
+    this.profileRequestVersion = (this.profileRequestVersion || 0) + 1;
+    this.nicknameSaveVersion = (this.nicknameSaveVersion || 0) + 1;
+    this.accountProfileToken = '';
+    this.setData({
+      userInfo: {}, profileReady: false, profileLoading: false,
+      showNicknameModal: false, tempNickname: '', nicknameError: '', savingNickname: false
+    });
+  },
+
+  onUnload() {
+    this.onHide();
+  },
+
   loadUserInfo() {
     const userInfo = getStorage('userInfo') || {};
     this.setData({ userInfo });
+  },
+
+  isCurrentAccount(token) {
+    return !this.profileHidden && Boolean(token) && getApp().getLoginToken() === token;
+  },
+
+  applyAccountProfile(profile, token) {
+    if (!this.isCurrentAccount(token)) return;
+    const userInfo = { ...profile };
+    getApp().globalData.userInfo = userInfo;
+    setStorage('userInfo', userInfo);
+    this.accountProfileToken = token;
+    this.setData({ userInfo, profileReady: true, profileError: '' });
+  },
+
+  async loadAccountProfile() {
+    const token = getApp().getLoginToken();
+    const version = (this.profileRequestVersion || 0) + 1;
+    this.profileRequestVersion = version;
+    this.setData({ profileLoading: true, profileReady: false, profileError: '', userInfo: {} });
+    try {
+      if (!token) throw { code: 401 };
+      const res = await http.get('/user/getMainMessage', {}, {
+        credentialScope: 'login', credential: token, invalidateOn401: false
+      });
+      if (version !== this.profileRequestVersion || !this.isCurrentAccount(token)) return;
+      if (!res.data || typeof res.data !== 'object' || Array.isArray(res.data)) throw { msg: '账号资料返回异常，请重试' };
+      this.applyAccountProfile(res.data, token);
+    } catch (error) {
+      if (version !== this.profileRequestVersion || this.profileHidden || getApp().getLoginToken() !== token) return;
+      this.setData({ userInfo: {}, profileError: '账号信息加载失败，请重试' });
+      if (error && error.code === 401) getApp().authNavigation.invalidate('login');
+    } finally {
+      if (version === this.profileRequestVersion && !this.profileHidden) this.setData({ profileLoading: false });
+    }
+  },
+
+  editNickname() {
+    if (!this.data.profileReady || !this.isCurrentAccount(this.accountProfileToken)) return;
+    this.setData({ showNicknameModal: true, tempNickname: this.data.userInfo.nickName || '', nicknameError: '' });
+  },
+
+  onNicknameInput(e) {
+    this.setData({ tempNickname: e.detail.value, nicknameError: '' });
+  },
+
+  closeNicknameModal() {
+    if (this.data.savingNickname) return;
+    this.setData({ showNicknameModal: false, tempNickname: '', nicknameError: '' });
+  },
+
+  async saveNickname() {
+    if (this.data.savingNickname || !this.data.profileReady) return;
+    const token = this.accountProfileToken;
+    if (!this.isCurrentAccount(token)) return;
+    const nickName = String(this.data.tempNickname || '').trim();
+    if (nickName.length > 20) {
+      this.setData({ nicknameError: '昵称最多20个字符' });
+      return;
+    }
+    const version = (this.nicknameSaveVersion || 0) + 1;
+    this.nicknameSaveVersion = version;
+    const isCurrent = () => version === this.nicknameSaveVersion && this.isCurrentAccount(token);
+    const options = { credentialScope: 'login', credential: token, invalidateOn401: false };
+    let saved = false;
+    this.setData({ savingNickname: true, nicknameError: '' });
+    try {
+      // 资料接口会同时更新头像：保存前重新读取，绝不以空头像覆盖未知资料。
+      const current = await http.get('/user/getMainMessage', {}, options);
+      if (!isCurrent()) return;
+      if (!current.data || typeof current.data !== 'object' || Array.isArray(current.data)) throw { msg: '账号资料返回异常，请重试' };
+      await http.post('/user/getMessage', {
+        nickName,
+        avatarUrl: current.data && current.data.avatarUrl != null ? current.data.avatarUrl : null
+      }, options);
+      saved = true;
+      if (!isCurrent()) return;
+      const refreshed = await http.get('/user/getMainMessage', {}, options);
+      if (!isCurrent()) return;
+      if (!refreshed.data || typeof refreshed.data !== 'object' || Array.isArray(refreshed.data)) throw { msg: '账号资料返回异常，请重试' };
+      this.applyAccountProfile(refreshed.data, token);
+      this.setData({ showNicknameModal: false, tempNickname: '' });
+      wx.toast({ title: '账号昵称已保存', icon: 'success' });
+    } catch (error) {
+      if (!isCurrent()) return;
+      if (error && error.code === 401) {
+        this.setData({ userInfo: {}, profileReady: false, showNicknameModal: false });
+        getApp().authNavigation.invalidate('login');
+        return;
+      }
+      this.setData({ nicknameError: saved ? '昵称可能已保存，资料刷新失败，请重试' : ((error && error.msg) || '昵称保存失败，请重试') });
+    } finally {
+      if (version === this.nicknameSaveVersion && !this.profileHidden) this.setData({ savingNickname: false });
+    }
   },
 
   async loadDevice(deviceId) {

@@ -120,22 +120,64 @@ test('normalizes input, confirms once, and persists the verified phone', async (
   assert.equal(workflow.snapshot().confirming, false);
 });
 
-test('contains transport failure semantics in the workflow', async () => {
-  const { workflow } = createWorkflow({
+test('keeps ownership rejections visible without a countdown or verified phone and allows correction', async () => {
+  const message = '该手机号已绑定其他账号，不能重复绑定；如需更换微信，请联系管理员迁移。';
+  const { workflow, values } = createWorkflow({
     transport: {
-      send: async () => {
-        throw { msg: '发送太频繁' };
-      },
-      confirm: async () => {
-        throw { userNotified: true };
-      }
+      send: async () => { throw { code: 0, msg: message, userNotified: true }; },
+      confirm: async () => { throw { code: 0, msg: message, userNotified: true }; }
     }
   });
+  values.loginToken = 'current-wechat-identity';
   workflow.changePhone('13800000003');
 
   assert.deepEqual(await workflow.send(), { status: 'failed' });
-  assert.equal(workflow.snapshot().message, '发送太频繁');
+  assert.equal(workflow.snapshot().message, message);
+  assert.equal(workflow.snapshot().retryAfterSeconds, 0);
+  assert.equal(workflow.snapshot().sending, false);
   workflow.changeCode('123456');
   assert.deepEqual(await workflow.confirm(), { status: 'failed' });
+  assert.equal(workflow.snapshot().message, message);
+  assert.equal(workflow.snapshot().confirming, false);
+  assert.equal(values.phone, undefined);
+  assert.equal(values.userInfo.phone, undefined);
+  assert.equal(values.loginToken, 'current-wechat-identity');
+
+  workflow.changePhone('13900000004');
   assert.equal(workflow.snapshot().message, '');
+  assert.equal(workflow.snapshot().code, '');
+  assert.equal(workflow.snapshot().phone, '13900000004');
+});
+
+test('late phone requests cannot overwrite a changed form or persist after leaving', async () => {
+  let rejectSend;
+  let resolveConfirm;
+  const { workflow, values } = createWorkflow({
+    transport: {
+      send: () => new Promise((_resolve, reject) => { rejectSend = reject; }),
+      confirm: () => new Promise(resolve => { resolveConfirm = resolve; })
+    }
+  });
+  workflow.changePhone('13800000003');
+  const sending = workflow.send();
+  workflow.changePhone('13900000004');
+  rejectSend({ code: 0, msg: '旧号码已占用', userNotified: true });
+  await sending;
+  assert.equal(workflow.snapshot().message, '');
+  assert.equal(workflow.snapshot().sending, false);
+
+  workflow.changeCode('123456');
+  const confirming = workflow.confirm();
+  workflow.changePhone('13700000005');
+  resolveConfirm();
+  assert.notEqual((await confirming).status, 'verified');
+  assert.equal(values.phone, undefined);
+  assert.equal(workflow.snapshot().phone, '13700000005');
+
+  workflow.changeCode('654321');
+  const leaving = workflow.confirm();
+  workflow.dispose();
+  resolveConfirm();
+  assert.notEqual((await leaving).status, 'verified');
+  assert.equal(values.phone, undefined);
 });

@@ -1,17 +1,17 @@
 // 设备数据加载公共服务，供 device-detail 和 setting 页共用
 import http from './http';
 import { DEVICE_STATUS_MAP } from './constants';
-import { getStorage, setStorage } from './storage';
 import logger from './logger';
 
 const { loadDeviceDetailsConcurrently } = require('./deviceDetailsLoader');
 
-async function loadDeviceStatus(deviceId, authToken) {
+async function loadDeviceStatus(deviceId, authToken, { invalidateOn401 = true } = {}) {
   try {
     const bindRes = await http.get('/user/bind/status', { deviceId }, {
       credentialScope: 'login',
       credential: authToken,
-      deviceId
+      deviceId,
+      invalidateOn401
     });
     return bindRes.code === 1 && bindRes.data ? bindRes.data : null;
   } catch (err) {
@@ -20,12 +20,13 @@ async function loadDeviceStatus(deviceId, authToken) {
   }
 }
 
-async function requestDeviceLocation(endpoint, deviceId, authToken) {
+async function requestDeviceLocation(endpoint, deviceId, authToken, { invalidateOn401 = true } = {}) {
   try {
     const locRes = await http.get(endpoint, { deviceId }, {
       credentialScope: 'login',
       credential: authToken,
-      deviceId
+      deviceId,
+      invalidateOn401
     });
     return locRes.code === 1 && locRes.data ? locRes.data : null;
   } catch (err) {
@@ -34,8 +35,8 @@ async function requestDeviceLocation(endpoint, deviceId, authToken) {
   }
 }
 
-export function loadDeviceInstallationLocation(deviceId, authToken) {
-  return requestDeviceLocation('/user/getInstallLocation', deviceId, authToken);
+export function loadDeviceInstallationLocation(deviceId, authToken, options) {
+  return requestDeviceLocation('/user/getInstallLocation', deviceId, authToken, options);
 }
 
 function createDevice(deviceId) {
@@ -65,13 +66,13 @@ function applyStoredName(device) {
   }
 }
 
-export async function loadDeviceData(deviceId, authToken) {
+export async function loadDeviceData(deviceId, authToken, options = {}) {
   const device = createDevice(deviceId);
   applyStoredName(device);
 
   const [statusDetails, installationLocation] = await Promise.all([
-    loadDeviceStatus(deviceId, authToken),
-    loadDeviceInstallationLocation(deviceId, authToken)
+    loadDeviceStatus(deviceId, authToken, options),
+    loadDeviceInstallationLocation(deviceId, authToken, options)
   ]);
   device.locationSource = installationLocation ? 'installation' : 'unknown';
 
@@ -82,7 +83,7 @@ export async function loadDeviceData(deviceId, authToken) {
     if (remoteName) {
       device.name = remoteName;
       try {
-        getApp().renameDevice(deviceId, remoteName);
+        if (!options.isCurrent || options.isCurrent()) getApp().renameDevice(deviceId, remoteName);
       } catch (err) {
         logger.debug('服务端设备名称未同步到本地缓存', { deviceId, error: err });
       }
@@ -99,37 +100,37 @@ export async function loadDeviceData(deviceId, authToken) {
   return device;
 }
 
-export async function loadDeviceContacts(authToken, deviceId) {
+export async function loadDeviceContacts(authToken, deviceId, { invalidateOn401 = true } = {}) {
   try {
     const phoneRes = await http.get('/user/userGetPhone', { deviceId }, {
       credentialScope: 'login',
       credential: authToken,
-      deviceId
+      deviceId,
+      invalidateOn401
     });
     if (phoneRes.code === 1 && Array.isArray(phoneRes.data)) {
-      const nameCache = getStorage('contactNameCache') || {};
       return phoneRes.data.map((item, index) => {
         const phone = item.phone || '';
         return {
           id: 'c' + index,
-          name: item.name || nameCache[phone] || '',
+          name: item.name || '未命名联系人',
           phone
         };
       });
     }
+    throw { msg: '联系人列表返回异常，请重试' };
   } catch (err) {
     logger.error('获取设备联系人失败', { deviceId, error: err });
     throw err;
   }
-  return [];
 }
 
-export async function loadDeviceDetails(deviceId, authToken) {
+export async function loadDeviceDetails(deviceId, authToken, options = {}) {
   return loadDeviceDetailsConcurrently({
     deviceId,
     authToken,
-    loadDeviceData,
-    loadDeviceContacts,
+    loadDeviceData: (id, token) => loadDeviceData(id, token, options),
+    loadDeviceContacts: (token, id) => loadDeviceContacts(token, id, options),
     buildMarkers
   });
 }

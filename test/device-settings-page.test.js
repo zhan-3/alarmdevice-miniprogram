@@ -4,12 +4,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function loadSettingPage({ http, logger, wx, app }) {
+function loadSettingPage({ http, logger, wx, app, storage = {} }) {
   const pagePath = path.join(__dirname, '../pages/setting/setting.js');
   const source = fs.readFileSync(pagePath, 'utf8')
     .replace("import { loadDeviceData, buildMarkers } from '../../utils/deviceService';", 'const { loadDeviceData, buildMarkers } = globalThis.__deps;')
     .replace("import http from '../../utils/http';", 'const http = globalThis.__deps.http;')
-    .replace("import { getStorage } from '../../utils/storage';", 'const { getStorage } = globalThis.__deps;')
+    .replace("import { getStorage, setStorage } from '../../utils/storage';", 'const { getStorage, setStorage } = globalThis.__deps;')
     .replace("import logger from '../../utils/logger';", 'const logger = globalThis.__deps.logger;');
 
   let definition;
@@ -19,7 +19,8 @@ function loadSettingPage({ http, logger, wx, app }) {
       logger,
       loadDeviceData: async () => null,
       buildMarkers: () => [],
-      getStorage: () => null
+      getStorage: key => storage[key] || null,
+      setStorage: (key, value) => { storage[key] = value; }
     },
     Page(value) { definition = value; },
     wx,
@@ -57,6 +58,108 @@ function createPage(definition, data) {
     }
   };
 }
+
+test('optional nickname saving preserves the latest avatar and refreshes profile without replacing login identity', async () => {
+  for (const input of ['  值班负责人  ', '   ']) {
+    const requests = [];
+    const storage = {};
+    const app = { globalData: {}, getLoginToken: () => 'same-user-jwt' };
+    let saved = false;
+    const definition = loadSettingPage({
+      app, storage, logger: { error() {} }, wx: { toast() {} },
+      http: {
+        async get(url, data, options) {
+          requests.push({ method: 'GET', url, options });
+          return { data: { nickName: saved ? input.trim() : '原昵称', avatarUrl: 'https://example.test/current-avatar.png', phone: '13800000003' } };
+        },
+        async post(url, data, options) {
+          requests.push({ method: 'POST', url, data, options });
+          saved = true;
+          return { code: 1 };
+        }
+      }
+    });
+    const page = createPage(definition, {});
+    await page.onShow();
+    page.editNickname();
+    page.onNicknameInput({ detail: { value: input } });
+    await page.saveNickname();
+    const update = requests.find(request => request.method === 'POST');
+    assert.equal(update.url, '/user/getMessage');
+    assert.equal(update.data.nickName, input.trim());
+    assert.equal(update.data.avatarUrl, 'https://example.test/current-avatar.png');
+    assert.equal(update.options.credential, 'same-user-jwt');
+    assert.equal(requests.filter(request => request.method === 'GET').length, 3);
+    assert.equal(storage.userInfo.nickName, input.trim());
+    assert.equal(app.globalData.userInfo.nickName, input.trim());
+    assert.equal(page.data.showNicknameModal, false);
+    assert.equal(app.getLoginToken(), 'same-user-jwt');
+  }
+});
+
+test('nickname failures preserve the cached profile and draft and never save without a readable current profile', async () => {
+  const storage = {};
+  const app = { globalData: {}, getLoginToken: () => 'same-user-jwt' };
+  let rejectGet = false;
+  let posts = 0;
+  const definition = loadSettingPage({
+    app, storage, logger: { error() {} }, wx: {},
+    http: {
+      async get() {
+        if (rejectGet) throw { msg: '无法读取头像资料' };
+        return { data: { nickName: '原昵称', avatarUrl: 'https://example.test/kept.png' } };
+      },
+      async post() { posts += 1; throw { code: 0, msg: '保存被拒绝', userNotified: true }; }
+    }
+  });
+  const page = createPage(definition, {});
+  await page.onShow();
+  page.editNickname();
+  page.onNicknameInput({ detail: { value: '新昵称' } });
+  await page.saveNickname();
+  assert.equal(page.data.nicknameError, '保存被拒绝');
+  assert.equal(storage.userInfo.nickName, '原昵称');
+  assert.equal(page.data.tempNickname, '新昵称');
+  assert.equal(page.data.savingNickname, false);
+  rejectGet = true;
+  await page.saveNickname();
+  assert.equal(posts, 1);
+  assert.equal(page.data.nicknameError, '无法读取头像资料');
+  assert.equal(page.data.showNicknameModal, true);
+});
+
+test('nickname requests do not overwrite another account or an unloaded page and duplicate saves are suppressed', async () => {
+  for (const leave of ['account-switch', 'page-unload']) {
+    let token = 'old-session';
+    let finish;
+    let writes = 0;
+    const storage = {};
+    const app = { globalData: {}, getLoginToken: () => token };
+    const definition = loadSettingPage({
+      app, storage, logger: { error() {} }, wx: { toast() { throw new Error('stale success'); } },
+      http: {
+        async get() { return { data: { nickName: '原昵称', avatarUrl: 'https://example.test/kept.png' } }; },
+        post() { writes += 1; return new Promise(resolve => { finish = resolve; }); }
+      }
+    });
+    const page = createPage(definition, {});
+    await page.onShow();
+    page.editNickname();
+    page.onNicknameInput({ detail: { value: '迟到昵称' } });
+    const saving = page.saveNickname();
+    await Promise.resolve();
+    await page.saveNickname();
+    assert.equal(writes, 1);
+    if (leave === 'account-switch') token = 'new-session';
+    else page.onUnload();
+    storage.userInfo = { nickName: '当前账号' };
+    app.globalData.userInfo = { nickName: '当前账号' };
+    finish({ code: 1 });
+    await saving;
+    assert.equal(storage.userInfo.nickName, '当前账号');
+    assert.equal(app.globalData.userInfo.nickName, '当前账号');
+  }
+});
 
 test('device name request carries deviceId and uses only user login authentication', async () => {
   const calls = [];

@@ -5,7 +5,7 @@
     </view>
     <text class="title">紧急报警系统</text>
     <text class="subtitle" wx:if="{{step === 1}}">微信登录后绑定手机号即可使用</text>
-    <text class="subtitle" wx:elif="{{step === 2}}">首次使用需要验证手机号</text>
+    <text class="subtitle" wx:elif="{{step === 2}}">为当前微信账号验证手机号</text>
   </view>
 
   <view class="login-content">
@@ -55,6 +55,6 @@
       <text class="privacy-hint">首次使用需完成微信隐私授权</text>
       <button class="privacy-link" bindtap="openPrivacyPolicy">查看《用户隐私保护指引》</button>
     </view>
-    <text wx:if="{{errMsg}}" class="error-tip">{{errMsg}}</text>
+    <text wx:if="{{errMsg}}" class="error-tip" aria-role="alert">{{errMsg}}</text>
   </view>
 </view>
