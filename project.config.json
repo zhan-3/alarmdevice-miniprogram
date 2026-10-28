@@ -1,0 +1,66 @@
+{
+  "compileType": "miniprogram",
+  "libVersion": "3.14.3",
+  "packOptions": {
+    "ignore": [
+      { "value": "history.har", "type": "file" },
+      { "value": ".har", "type": "suffix" },
+      { "value": ".scratch", "type": "folder" },
+      { "value": ".impeccable", "type": "folder" },
+      { "value": ".git", "type": "folder" },
+      { "value": "test", "type": "folder" },
+      { "value": "tests", "type": "folder" },
+      { "value": "server", "type": "folder" },
+      { "value": "docs", "type": "folder" },
+      { "value": "scripts", "type": "folder" },
+      { "value": ".github", "type": "folder" },
+      { "value": ".vscode", "type": "folder" },
+      { "value": ".idea", "type": "folder" },
+      { "value": "node_modules", "type": "folder" },
+      { "value": ".md", "type": "suffix" },
+      { "value": ".log", "type": "suffix" },
+      { "value": "project.config.json", "type": "file" },
+      { "value": "project.private.config.json", "type": "file" },
+      { "value": "package.json", "type": "file" },
+      { "value": "package-lock.json", "type": "file" },
+      { "value": ".gitignore", "type": "file" },
+      { "value": ".gitattributes", "type": "file" },
+      { "value": ".editorconfig", "type": "file" },
+      { "value": ".npmrc", "type": "file" }
+    ],
+    "include": []
+  },
+  "setting": {
+    "coverView": true,
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "enhance": true,
+    "showShadowRootInWxmlPanel": true,
+    "packNpmRelationList": [],
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false
+  },
+  "condition": {},
+  "editorSetting": {
+    "tabIndent": "auto",
+    "tabSize": 2
+  },
+  "appid": "wxc3d1b028d5e9a31c",
+  "simulatorPluginLibVersion": {}
+}
