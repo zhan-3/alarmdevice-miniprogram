@@ -10,7 +10,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function loadContactsService(http, app) {
+function loadContactsService(http, app, repository) {
   const filename = path.join(__dirname, '../utils/deviceService.js');
   const source = fs.readFileSync(filename, 'utf8')
     .replace("import http from './http';", 'const http = __http;')
@@ -21,7 +21,10 @@ function loadContactsService(http, app) {
     __http: http, module: { exports: {} }, getApp: () => app,
     // Deliberately poisoned legacy cache: it must never participate in names.
     getStorage() { throw new Error('legacy contact cache read'); },
-    require: () => require('../utils/deviceDetailsLoader')
+    require(request) {
+      if (request.endsWith('/deviceRepository')) return { deviceRepository: repository };
+      return require('../utils/deviceDetailsLoader');
+    }
   };
   vm.runInNewContext(`${source}\nmodule.exports = { loadDeviceContacts };`, context, { filename });
   return context.module.exports.loadDeviceContacts;
@@ -41,12 +44,14 @@ function harness(handlers = {}) {
     if (handlers[method]) return handlers[method](...args);
     return { code: 1, data: method === 'get' ? [] : null };
   }]));
-  const loadDeviceContacts = loadContactsService(http, app);
+  const repository = require('../utils/deviceRepository').createDeviceRepository();
+  repository.syncSession(token, ['SN-A', 'SN-B']);
+  const loadDeviceContacts = loadContactsService(http, app, repository);
   const filename = path.join(__dirname, '../pages/device-detail/device-detail.js');
   const source = fs.readFileSync(filename, 'utf8')
     .replace("import http from '../../utils/http';", 'const http = __http;')
     .replace("import { getStorage } from '../../utils/storage';", 'const getStorage = key => __storage[key];')
-    .replace("import { loadDeviceDetails, loadDeviceContacts } from '../../utils/deviceService';", 'const { loadDeviceDetails, loadDeviceContacts } = __service;')
+    .replace("import { loadDeviceDetails, loadDeviceContacts, getCachedDeviceDetails } from '../../utils/deviceService';", 'const { loadDeviceDetails, loadDeviceContacts, getCachedDeviceDetails } = __service;')
     .replace("import { DEVICE_STATUS_MAP } from '../../utils/constants';", 'const DEVICE_STATUS_MAP = {};')
     .replace("import logger from '../../utils/logger';", 'const logger = { error() {} };');
   let page;
@@ -54,10 +59,14 @@ function harness(handlers = {}) {
     __http: http, __storage: storage,
     __service: {
       loadDeviceContacts,
+      getCachedDeviceDetails: handlers.cached || (() => null),
       loadDeviceDetails: handlers.details || (async () => ({ device: { id: 'SN-A', sn: 'SN-A', contacts: [] }, markers: [] }))
     },
     getApp: () => app,
-    require: () => require('../utils/requestVersion'),
+    require(request) {
+      if (request.endsWith('/deviceRepository')) return { deviceRepository: repository };
+      return require('../utils/requestVersion');
+    },
     Page(definition) {
       page = {
         ...definition,
@@ -73,7 +82,8 @@ function harness(handlers = {}) {
     wx: { toast(options) { toasts.push(options); }, modal: async () => true },
     console
   }, { filename });
-  return { page, calls, toasts, invalidations, storage, app, setToken(value) { token = value; } };
+  return { page, calls, toasts, invalidations, storage, app, repository,
+    setToken(value) { token = value; repository.syncSession(value, ['SN-A', 'SN-B']); } };
 }
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -191,6 +201,40 @@ test('late contact GET results or authorization errors cannot mutate a new sessi
     assert.equal(h.invalidations.length, 0);
     assert.equal(h.toasts.length, 0);
   }
+});
+
+test('same-device return keeps the view during refresh, but authorization failure removes it', async () => {
+  let next = Promise.resolve({ device: { id: 'SN-A', sn: 'SN-A', name: '设备A', contacts: [] }, markers: [] });
+  const h = harness({ details: () => next });
+  await h.page.loadDeviceFromAPI();
+  const device = h.page.data.device;
+  h.page.onHide();
+  assert.equal(h.page.data.device, device);
+  const pending = deferred();
+  next = pending.promise;
+  h.page.onShow();
+  assert.equal(h.page.data.device, device);
+  pending.reject({ code: 403 });
+  await tick();
+  assert.equal(h.page.data.device, null);
+  assert.equal(h.page.data.loadError, true);
+});
+
+test('device refresh failure keeps prior content and changing account clears it before fetching', async () => {
+  let next = Promise.resolve({ device: { id: 'SN-A', sn: 'SN-A', contacts: [] }, markers: [] });
+  const h = harness({ details: () => next });
+  await h.page.loadDeviceFromAPI();
+  const device = h.page.data.device;
+  next = Promise.reject({ code: -1 });
+  await h.page.loadDeviceFromAPI();
+  assert.equal(h.page.data.device, device);
+  const pending = deferred();
+  next = pending.promise;
+  h.setToken('new-account');
+  const loading = h.page.loadDeviceFromAPI();
+  assert.equal(h.page.data.device, null);
+  pending.resolve({ device: { id: 'SN-A', sn: 'SN-A', contacts: [] }, markers: [] });
+  await loading;
 });
 
 test('a full detail request started before adding cannot overwrite the authoritative contact refresh', async () => {

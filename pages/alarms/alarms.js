@@ -9,6 +9,8 @@ Page({
     userInfo: {},
     alarms: [],
     loading: false,
+    refreshing: false,
+    hasLoaded: false,
     loadError: false,
     authRetryNeeded: false,
     hasMore: false,
@@ -44,7 +46,8 @@ Page({
       return;
     }
     const page = reset ? 1 : this.data.page;
-    this.setData({ loading: true, loadError: false });
+    // Keep a successfully loaded list (including the empty state) visible on return.
+    this.setData({ loading: true, refreshing: reset && this.data.hasLoaded, loadError: false });
     try {
       const res = await http.get('/user/alarms', {
         status: 'pending',
@@ -56,7 +59,8 @@ Page({
       this.setData({
         alarms: reset ? items : mergeAlarmItems(this.data.alarms, items),
         page: page + 1,
-        hasMore: Boolean(result.hasMore)
+        hasMore: Boolean(result.hasMore),
+        hasLoaded: true
       });
     } catch (error) {
       logger.error('加载报警列表失败', { error });
@@ -66,7 +70,7 @@ Page({
         wx.showToast({ title: '加载更多失败，请重试', icon: 'none' });
       }
     } finally {
-      this.setData({ loading: false });
+      this.setData({ loading: false, refreshing: false });
       if (this.reloadAfterCurrentLoad) {
         this.reloadAfterCurrentLoad = false;
         await this.loadAlarms(true);
@@ -156,17 +160,17 @@ Page({
   },
 
   openAlarmLocation(e) {
-    const latitude = Number(e.currentTarget.dataset.lat);
-    const longitude = Number(e.currentTarget.dataset.lng);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    const alarmId = String(e.currentTarget.dataset.id || '');
+    const item = this.data.alarms.find(alarm => alarm.alarmId === alarmId);
+    if (!item || !item.mapLocation || !item.hasLocation) {
       wx.showToast({ title: '位置数据不可用', icon: 'none' });
       return;
     }
     wx.openLocation({
-      latitude,
-      longitude,
+      latitude: item.mapLocation.latitude,
+      longitude: item.mapLocation.longitude,
       scale: 16,
-      name: `设备 ${e.currentTarget.dataset.sn || ''} 报警位置`
+      name: `设备 ${item.deviceSn || ''} 报警位置`
     });
   },
 

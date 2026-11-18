@@ -15,6 +15,8 @@ Page({
     isLogin: false,
     items: [],
     loading: false,
+    refreshing: false,
+    refreshError: false,
     loadError: false,
     loadMoreError: false,
     hasMore: false,
@@ -37,23 +39,53 @@ Page({
 
   async onShow() {
     if (this.authChecking) return;
+    this.historyHidden = false;
+    const token = getApp().getLoginToken();
+    if (!token || this.historyToken !== token) this.clearPrivateData();
+    this.historyToken = token;
     this.authChecking = true;
+    const showVersion = (this.historyShowVersion || 0) + 1;
+    this.historyShowVersion = showVersion;
     this.invalidateHistoryLoad();
+    this.loadingRequestVersion = null;
     this.handlerRequestVersion = (this.handlerRequestVersion || 0) + 1;
     this.reloadAfterCurrentLoad = false;
-    this.clearHistoryResults();
-    this.setData({ handlers: [], handlersLoading: false, handlersLoadError: false });
+    this.setData({ loading: false, refreshing: false, handlersLoading: false });
     const outcome = await getApp().authNavigation.restore({ target: '/pages/alarm-history/alarm-history' });
+    if (showVersion !== this.historyShowVersion || this.historyHidden) return;
     this.authChecking = false;
+    if (token !== getApp().getLoginToken()) {
+      this.clearPrivateData();
+      return;
+    }
     if (outcome.type === 'ready') {
       this.setData({ isLogin: true, authRetryNeeded: false });
-      return this.loadHistory(true, true);
+      return this.loadHistory(true, true, true);
     }
-
-    this.clearPrivateData();
+    if (outcome.type !== 'retryable-error') this.clearPrivateData();
     if (outcome.type === 'retryable-error') {
-      this.setData({ authRetryNeeded: true, loadError: true });
+      this.setData({ authRetryNeeded: true, loadError: !this.data.hasLoaded, refreshError: this.data.hasLoaded });
     }
+  },
+
+  onHide() {
+    this.historyHidden = true;
+    this.authChecking = false;
+    this.historyShowVersion = (this.historyShowVersion || 0) + 1;
+    this.invalidateHistoryLoad();
+    this.loadingRequestVersion = null;
+    this.handlerRequestVersion = (this.handlerRequestVersion || 0) + 1;
+    this.reloadAfterCurrentLoad = false;
+    this.setData({ loading: false, refreshing: false, handlersLoading: false, handlerPickerVisible: false });
+  },
+
+  onUnload() {
+    this.onHide();
+    this.clearPrivateData();
+  },
+
+  isHistoryRequestCurrent(version, token) {
+    return !this.historyHidden && version === this.historyRequestVersion && token === getApp().getLoginToken();
   },
 
   invalidateHistoryLoad() {
@@ -72,12 +104,19 @@ Page({
   },
 
   clearPrivateData() {
+    this.historyToken = '';
+    this.historyPageCount = 0;
     this.invalidateHistoryLoad();
     this.handlerRequestVersion = (this.handlerRequestVersion || 0) + 1;
     this.reloadAfterCurrentLoad = false;
     this.appliedFilters = {};
     this.setData({
       isLogin: false,
+      loading: false,
+      refreshing: false,
+      refreshError: false,
+      loadError: false,
+      authRetryNeeded: false,
       items: [],
       nextCursor: '',
       hasMore: false,
@@ -100,9 +139,12 @@ Page({
     return this.appliedFilters || {};
   },
 
-  async loadHistory(reset = false, queueIfBusy = false) {
-    if (!this.data.isLogin || this.data.loading) {
-      if (reset && this.data.loading && queueIfBusy) this.reloadAfterCurrentLoad = true;
+  async loadHistory(reset = false, queueIfBusy = false, preservePages = false) {
+    if (!this.data.isLogin || this.historyHidden || this.data.loading) {
+      if (reset && this.data.loading && queueIfBusy) {
+        this.reloadAfterCurrentLoad = true;
+        this.preservePagesAfterCurrentLoad = preservePages;
+      }
       return;
     }
     if (!reset && (!this.data.hasMore || !this.data.nextCursor)) return;
@@ -110,41 +152,61 @@ Page({
     const requestVersion = (this.historyRequestVersion || 0) + 1;
     this.historyRequestVersion = requestVersion;
     this.loadingRequestVersion = requestVersion;
-    const cursor = reset ? '' : this.data.nextCursor;
+    const token = getApp().getLoginToken();
+    if (!token || (this.historyToken && this.historyToken !== token)) {
+      this.clearPrivateData();
+      this.setData({ authRetryNeeded: true, loadError: true });
+      return;
+    }
+    this.historyToken = token;
+    let cursor = reset ? '' : this.data.nextCursor;
+    const filters = this.currentFilters();
+    const pagesToLoad = reset && preservePages ? Math.max(1, this.historyPageCount || 1) : 1;
     this.setData({
       loading: true,
+      refreshing: reset && this.data.hasLoaded,
+      refreshError: false,
       loadError: reset ? false : this.data.loadError,
       loadMoreError: false
     });
 
     try {
-      const res = await http.get(
-        '/user/alarms/history',
-        buildHistoryParams(this.currentFilters(), cursor, PAGE_SIZE),
-        { credentialScope: 'login' }
-      );
-      if (requestVersion !== this.historyRequestVersion) return;
-      const payload = res.data || {};
-      const incoming = normalizeHistoryItems(payload.items);
-      const nextCursor = payload.nextCursor === null || typeof payload.nextCursor === 'undefined'
-        ? ''
-        : String(payload.nextCursor);
+      let incoming = [];
+      let hasMore = false;
+      let pagesRead = 0;
+      // Rebuild the previously loaded window before replacing it: keep pagination and scroll stable.
+      do {
+        const res = await http.get(
+          '/user/alarms/history',
+          buildHistoryParams(filters, cursor, PAGE_SIZE),
+          { credentialScope: 'login', credential: token }
+        );
+        if (!this.isHistoryRequestCurrent(requestVersion, token)) return;
+        const payload = res.data || {};
+        incoming = mergeHistoryItems(incoming, normalizeHistoryItems(payload.items));
+        cursor = payload.nextCursor == null ? '' : String(payload.nextCursor);
+        hasMore = Boolean(payload.hasMore && cursor);
+        pagesRead += 1;
+      } while (hasMore && pagesRead < pagesToLoad);
+      this.historyPageCount = reset ? pagesRead : (this.historyPageCount || 1) + pagesRead;
       this.setData({
         items: reset ? incoming : mergeHistoryItems(this.data.items, incoming),
-        nextCursor,
-        hasMore: Boolean(payload.hasMore && nextCursor),
+        nextCursor: cursor,
+        hasMore,
         hasLoaded: true,
         loadError: false
       });
     } catch (error) {
-      if (requestVersion !== this.historyRequestVersion) return;
+      if (!this.isHistoryRequestCurrent(requestVersion, token)) return;
       logger.error('加载处理历史失败', { reset, error });
-      if (error && error.code === 401) {
+      if (error && (error.code === 401 || error.code === 403)) {
         this.clearPrivateData();
-        this.setData({ authRetryNeeded: true, loadError: true });
+        this.setData({ authRetryNeeded: error.code === 401, loadError: true });
         return;
       }
-      if (reset && this.data.items.length === 0) {
+      if (reset && this.data.hasLoaded) {
+        this.setData({ refreshError: true });
+      } else if (reset && this.data.items.length === 0) {
         this.setData({ loadError: true, hasLoaded: true });
       } else {
         this.setData({ loadMoreError: true });
@@ -155,11 +217,11 @@ Page({
     } finally {
       if (this.loadingRequestVersion === requestVersion) {
         this.loadingRequestVersion = null;
-        this.setData({ loading: false });
+        this.setData({ loading: false, refreshing: false });
       }
-      if (this.reloadAfterCurrentLoad && !this.data.loading && this.data.isLogin) {
+      if (this.reloadAfterCurrentLoad && !this.data.loading && this.data.isLogin && !this.historyHidden) {
         this.reloadAfterCurrentLoad = false;
-        await this.loadHistory(true, true);
+        await this.loadHistory(true, true, this.preservePagesAfterCurrentLoad);
       }
     }
   },
@@ -169,7 +231,7 @@ Page({
       this.onShow();
       return;
     }
-    this.loadHistory(this.data.items.length === 0);
+    this.loadHistory(this.data.refreshError || this.data.items.length === 0, true, this.data.refreshError);
   },
 
   onPullDownRefresh() {
@@ -230,6 +292,7 @@ Page({
 
   async loadHandlers(keyword = '') {
     if (this.data.handlersLoading) return;
+    const token = getApp().getLoginToken();
     const requestVersion = (this.handlerRequestVersion || 0) + 1;
     this.handlerRequestVersion = requestVersion;
     this.setData({ handlersLoading: true, handlersLoadError: false });
@@ -237,14 +300,15 @@ Page({
       const res = await http.get('/user/alarms/history/handlers', {
         keyword: String(keyword || '').trim(),
         limit: 20
-      }, { credentialScope: 'login' });
-      if (requestVersion !== this.handlerRequestVersion) return;
+      }, { credentialScope: 'login', credential: token });
+      if (requestVersion !== this.handlerRequestVersion || this.historyHidden || token !== getApp().getLoginToken()) return;
       this.setData({ handlers: normalizeHandlers(res.data) });
     } catch (error) {
-      if (requestVersion !== this.handlerRequestVersion) return;
+      if (requestVersion !== this.handlerRequestVersion || this.historyHidden || token !== getApp().getLoginToken()) return;
       logger.error('加载处理人选项失败', { error });
-      if (error && error.code === 401) {
+      if (error && (error.code === 401 || error.code === 403)) {
         this.clearPrivateData();
+        this.setData({ authRetryNeeded: error.code === 401, loadError: true });
         return;
       }
       this.setData({ handlersLoadError: true });
@@ -281,7 +345,7 @@ Page({
       this.appliedFilters.endDate || this.appliedFilters.handlerId
     );
     this.invalidateHistoryLoad();
-    this.setData({ hasActiveFilters, filtersExpanded: false, items: [], nextCursor: '', hasMore: false });
+    this.setData({ hasActiveFilters, filtersExpanded: false, items: [], nextCursor: '', hasMore: false, hasLoaded: false });
     this.loadHistory(true, true);
   },
 
@@ -296,6 +360,7 @@ Page({
       selectedHandlerName: '',
       hasActiveFilters: false,
       filtersExpanded: false,
+      hasLoaded: false,
       items: [],
       nextCursor: '',
       hasMore: false

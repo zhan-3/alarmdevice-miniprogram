@@ -15,7 +15,7 @@ function loadDetailPage({ http, wx, app, logger = { error() {} } }) {
     __deps: { http, logger, env: { baseURL: 'https://api.example.test' } },
     Page(value) { definition = value; },
     wx,
-    getApp() { return app; },
+    getApp() { return { getLoginToken: () => 'session-A', ...app }; },
     require(request) {
       if (request.endsWith('/alarmHistory')) return require('../utils/alarmHistory');
       throw new Error(`Unexpected require: ${request}`);
@@ -66,6 +66,56 @@ test('revalidates detail on every show and clears data after an unbind 404', asy
   assert.equal(requests, 2);
   assert.equal(page.data.item, null);
   assert.equal(page.data.unavailable, true);
+});
+
+test('detail stays visible while revalidating and survives transient failure, not a permission failure', async () => {
+  let response = Promise.resolve({ data: { alarmId: '42', status: 'handled' } });
+  const definition = loadDetailPage({
+    wx: { showToast() {} },
+    app: { authNavigation: { async restore() { return { type: 'ready' }; } } },
+    http: { get() { return response; } }
+  });
+  const page = createPage(definition, { alarmId: '42' });
+  await page.onShow();
+  const previous = page.data.item;
+  let reject;
+  response = new Promise((_resolve, no) => { reject = no; });
+  page.onHide();
+  const showing = page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(page.data.item, previous);
+  reject({ code: -1 });
+  await showing;
+  assert.equal(page.data.item, previous);
+  response = Promise.reject({ code: 404 });
+  await page.onShow();
+  assert.equal(page.data.item, null);
+  assert.equal(page.data.unavailable, true);
+});
+
+test('changing account clears detail immediately and hidden requests cannot write back', async () => {
+  let token = 'account-A';
+  let finish;
+  const definition = loadDetailPage({
+    wx: {},
+    app: { getLoginToken: () => token, authNavigation: { async restore() { return { type: 'ready' }; } } },
+    http: { get: () => new Promise(resolve => { finish = resolve; }) }
+  });
+  const page = createPage(definition, { alarmId: '42', item: { alarmId: '42' } });
+  page.detailToken = token;
+  page.detailAlarmId = '42';
+  const showing = page.onShow();
+  await new Promise(resolve => setImmediate(resolve));
+  page.onHide();
+  finish({ data: { alarmId: 'late' } });
+  await showing;
+  assert.equal(page.data.item.alarmId, '42');
+  token = 'account-B';
+  const newShowing = page.onShow();
+  assert.equal(page.data.item, null);
+  await new Promise(resolve => setImmediate(resolve));
+  finish({ data: { alarmId: '42' } });
+  await newShowing;
 });
 
 test('clears detail and downloaded recording when authentication fails', async () => {
@@ -168,4 +218,40 @@ test('downloads protected recording with an Authorization header before playback
 
   assert.deepEqual(unlinkedPaths, ['wxfile://tmp/alarm.mp3', 'wxfile://tmp/orphan.mp3']);
   assert.equal(page.data.recordingPath, '');
+});
+
+test('history detail uses the same backend display coordinates and never the original hardware GPS', async () => {
+  const opened = [];
+  const definition = loadDetailPage({
+    wx: { openLocation(options) { opened.push(options); } },
+    app: { authNavigation: { async restore() { return { type: 'ready' }; } } },
+    http: { async get() { return { data: {
+      alarmId: '42', deviceSn: 'SN001', gpsLng: 116.404, gpsLat: 39.915, coordinateSystem: 'wgs84',
+      displayLocation: { longitude: 116.4102445, latitude: 39.9164043, coordinateSystem: 'gcj02' }
+    } }; } }
+  });
+  const page = createPage(definition, { alarmId: '42' });
+  await page.onShow();
+  page.openAlarmLocation();
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0].longitude, 116.4102445);
+  assert.equal(opened[0].latitude, 39.9164043);
+  assert.equal(page.data.item.gpsLng, 116.404);
+});
+
+test('history detail refuses raw-only and stale cached positions without a backend map projection', async () => {
+  const opened = [], toasts = [];
+  const definition = loadDetailPage({
+    wx: { openLocation(options) { opened.push(options); }, showToast(options) { toasts.push(options); } },
+    app: { authNavigation: { async restore() { return { type: 'ready' }; } } },
+    http: { async get() { return { data: { alarmId: '42', gpsLng: 116.404, gpsLat: 39.915 } }; } }
+  });
+  const page = createPage(definition, { alarmId: '42' });
+  await page.onShow();
+  assert.equal(page.data.item.hasLocation, false);
+  page.openAlarmLocation();
+  page.setData({ item: { gpsLng: 116.404, gpsLat: 39.915, hasLocation: true } });
+  page.openAlarmLocation();
+  assert.equal(opened.length, 0);
+  assert.equal(toasts.length, 2);
 });

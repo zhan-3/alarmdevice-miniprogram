@@ -1,3 +1,5 @@
+const { getAlarmMapLocation } = require('./alarmLocation');
+
 function pad(value) {
   return String(value).padStart(2, '0');
 }
@@ -46,8 +48,11 @@ function normalizeAlarmItems(items, devices = []) {
     const alarmId = String(item.alarmId || '');
     const deviceSn = String(item.deviceSn || '');
     const storedName = deviceNames.get(deviceSn) || '';
+    const mapLocation = getAlarmMapLocation(item);
     return {
       ...item,
+      mapLocation,
+      hasLocation: Boolean(mapLocation),
       alarmId,
       deviceSn,
       deviceName: storedName && storedName !== deviceSn ? storedName : '',

@@ -57,6 +57,21 @@ test('removing selected device selects another and clearing preserves login iden
   assert.equal(storage.snapshot().loginToken, 'login-user');
 });
 
+test('server reconciliation preserves known aliases and selection and chooses a fallback only when removed', () => {
+  const storage = memoryStorage({ loginToken: 'same-user' });
+  const devices = createBoundDeviceSet(storage);
+  devices.bind({ sn: 'A', name: '桥A' });
+  devices.bind({ sn: 'B', name: '桥B' });
+  devices.select('A');
+  devices.reconcile(['A', 'B', 'C', 'C']);
+  assert.equal(devices.selectedDeviceSn(), 'A');
+  assert.deepEqual(devices.list(), [{ sn: 'A', name: '桥A' }, { sn: 'B', name: '桥B' }, { sn: 'C', name: 'C' }]);
+  devices.reconcile(['B', 'C']);
+  assert.equal(devices.selectedDeviceSn(), 'B');
+  assert.equal(devices.get('A'), null);
+  assert.equal(storage.snapshot().loginToken, 'same-user');
+});
+
 test('ignores invalid stale selection and duplicate cached records', () => {
   const devices = createBoundDeviceSet(memoryStorage({
     boundDevices: [{ sn: 'A' }, null, { sn: 'A', name: '桥 A' }], selectedDeviceSn: 'REVOKED'

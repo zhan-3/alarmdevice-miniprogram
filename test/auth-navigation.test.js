@@ -286,6 +286,92 @@ test('establish uses the same restoration path and reLaunch navigation policy', 
   ]]);
 });
 
+test('logout makes pending restoration at every network stage inert, including late 401s', async () => {
+  for (const stage of ['profile', 'devices', 'device']) {
+    for (const fail of [false, true]) {
+      let resolve, reject;
+      const pending = new Promise((yes, no) => { resolve = yes; reject = no; });
+      const profile = { nickName: 'old profile', phone: '13900000000' };
+      const h = createHarness({
+        stored: { loginToken: 'old-login', boundDevices: [{ sn: 'A' }] },
+        transport: transport({
+          validateLogin: () => stage === 'profile' ? pending : Promise.resolve(profile),
+          listBoundDevices: () => stage === 'devices' ? pending : Promise.resolve(['A']),
+          validateDevice: () => stage === 'device' ? pending : Promise.resolve({ name: 'old device' })
+        })
+      });
+      const restoring = h.auth.restore({ target: '/pages/home/home' });
+      await new Promise(done => setImmediate(done));
+      h.auth.logout();
+      const navigationAfterLogout = h.navigation.calls();
+      if (fail) reject({ code: 401 });
+      else resolve(stage === 'profile' ? profile : stage === 'devices' ? ['A'] : { name: 'old device' });
+      const outcome = await restoring;
+      assert.equal(outcome.type, 'superseded');
+      assert.equal(h.storage.snapshot().loginToken, undefined);
+      assert.equal(h.storage.snapshot().userInfo, undefined);
+      assert.deepEqual(h.storage.snapshot().boundDevices, []);
+      assert.equal(h.stateChanges.at(-1).loginToken, '');
+      assert.deepEqual(h.navigation.calls(), navigationAfterLogout);
+    }
+  }
+});
+
+test('an old restoration cannot overwrite or clear a newer successful login', async () => {
+  for (const fail of [false, true]) {
+    let resolve, reject;
+    const pending = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const h = createHarness({
+      stored: { loginToken: 'old-login' },
+      transport: transport({
+        validateLogin: credential => credential === 'old-login' ? pending : Promise.resolve({ nickName: 'new profile', phone: '13900000000' }),
+        listBoundDevices: async () => ['B'],
+        validateDevice: async () => ({ name: 'new device' })
+      })
+    });
+    const old = h.auth.restore({ target: '/pages/alarms/alarms' });
+    await h.auth.establish('new-login', { target: '/pages/home/home' });
+    const snapshot = h.storage.snapshot();
+    const navigation = h.navigation.calls();
+    if (fail) reject({ code: 401 });
+    else resolve({ nickName: 'old profile', phone: '13900000000' });
+    assert.equal((await old).type, 'superseded');
+    assert.deepEqual(h.storage.snapshot(), snapshot);
+    assert.equal(h.stateChanges.at(-1).loginToken, 'new-login');
+    assert.deepEqual(h.navigation.calls(), navigation);
+  }
+});
+
+test('re-establishing the same credential still supersedes an earlier validation', async () => {
+  let finish;
+  let validations = 0;
+  const first = new Promise(resolve => { finish = resolve; });
+  const h = createHarness({
+    stored: { loginToken: 'same-jwt' },
+    transport: transport({ validateLogin() {
+      validations += 1;
+      return validations === 1 ? first : Promise.resolve({ nickName: 'new profile', phone: '13900000000' });
+    } })
+  });
+  const old = h.auth.restore();
+  const previousVersion = h.auth.getSessionVersion();
+  await h.auth.establish('same-jwt');
+  assert.notEqual(h.auth.getSessionVersion(), previousVersion);
+  finish({ nickName: 'old profile', phone: '13900000000' });
+  assert.equal((await old).type, 'superseded');
+  assert.equal(h.storage.snapshot().userInfo.nickName, 'new profile');
+});
+
+test('logout also prevents navigation from a previously resolved restoration queued in the same turn', async () => {
+  const h = createHarness({ stored: { loginToken: 'login-user' } });
+  await h.auth.restore();
+  const queued = h.auth.restore({ target: '/pages/home/home' });
+  h.auth.logout();
+  const navigation = h.navigation.calls();
+  assert.equal((await queued).type, 'superseded');
+  assert.deepEqual(h.navigation.calls(), navigation);
+});
+
 test('logout clears auth data and reaches login', async () => {
   const harness = createHarness({
     stored: {

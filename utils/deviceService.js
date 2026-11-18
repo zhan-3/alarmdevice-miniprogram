@@ -4,35 +4,39 @@ import { DEVICE_STATUS_MAP } from './constants';
 import logger from './logger';
 
 const { loadDeviceDetailsConcurrently } = require('./deviceDetailsLoader');
+const { deviceRepository } = require('./deviceRepository');
 
-async function loadDeviceStatus(deviceId, authToken, { invalidateOn401 = true } = {}) {
+async function fetchResource(deviceId, authToken, resource, load, options = {}) {
   try {
-    const bindRes = await http.get('/user/bind/status', { deviceId }, {
-      credentialScope: 'login',
-      credential: authToken,
-      deviceId,
-      invalidateOn401
-    });
-    return bindRes.code === 1 && bindRes.data ? bindRes.data : null;
-  } catch (err) {
-    logger.error('获取设备绑定状态失败', { deviceId, error: err });
-    throw err;
+    return await deviceRepository.fetch(authToken, deviceId, resource, load);
+  } catch (error) {
+    // Shared reads must never let an old session's failure invalidate a new login.
+    const app = getApp();
+    if (options.invalidateOn401 !== false && authToken === app.getLoginToken() &&
+        (!options.isCurrent || options.isCurrent()) && error && (error.code === 401 || error.code === 403)) {
+      app.authNavigation.invalidate(error.code === 401 ? 'login' : { type: 'device', sn: deviceId });
+    }
+    throw error;
   }
 }
 
-async function requestDeviceLocation(endpoint, deviceId, authToken, { invalidateOn401 = true } = {}) {
-  try {
-    const locRes = await http.get(endpoint, { deviceId }, {
-      credentialScope: 'login',
-      credential: authToken,
-      deviceId,
-      invalidateOn401
+async function loadDeviceStatus(deviceId, authToken, options = {}) {
+  return fetchResource(deviceId, authToken, 'status', async () => {
+    const res = await http.get('/user/bind/status', { deviceId }, {
+      credentialScope: 'login', credential: authToken, deviceId, invalidateOn401: false
     });
-    return locRes.code === 1 && locRes.data ? locRes.data : null;
-  } catch (err) {
-    logger.error('获取设备位置失败', { deviceId, endpoint, error: err });
-    throw err;
-  }
+    if (res.code !== 1 || !res.data) throw { msg: '设备状态返回异常' };
+    return res.data;
+  }, options);
+}
+
+async function requestDeviceLocation(endpoint, deviceId, authToken, options = {}) {
+  return fetchResource(deviceId, authToken, 'location', async () => {
+    const res = await http.get(endpoint, { deviceId }, {
+      credentialScope: 'login', credential: authToken, deviceId, invalidateOn401: false
+    });
+    return res.code === 1 && res.data ? res.data : null;
+  }, options);
 }
 
 export function loadDeviceInstallationLocation(deviceId, authToken, options) {
@@ -66,28 +70,16 @@ function applyStoredName(device) {
   }
 }
 
-export async function loadDeviceData(deviceId, authToken, options = {}) {
+function composeDevice(deviceId, statusDetails, installationLocation) {
   const device = createDevice(deviceId);
   applyStoredName(device);
-
-  const [statusDetails, installationLocation] = await Promise.all([
-    loadDeviceStatus(deviceId, authToken, options),
-    loadDeviceInstallationLocation(deviceId, authToken, options)
-  ]);
   device.locationSource = installationLocation ? 'installation' : 'unknown';
 
   if (statusDetails) {
     device.status = statusDetails.status || 'unknown';
     device.statusText = DEVICE_STATUS_MAP[device.status] || '未知状态';
     const remoteName = typeof statusDetails.name === 'string' ? statusDetails.name.trim() : '';
-    if (remoteName) {
-      device.name = remoteName;
-      try {
-        if (!options.isCurrent || options.isCurrent()) getApp().renameDevice(deviceId, remoteName);
-      } catch (err) {
-        logger.debug('服务端设备名称未同步到本地缓存', { deviceId, error: err });
-      }
-    }
+    if (remoteName) device.name = remoteName;
   }
   if (installationLocation) {
     const latitude = Number(installationLocation.gpsLat);
@@ -100,13 +92,50 @@ export async function loadDeviceData(deviceId, authToken, options = {}) {
   return device;
 }
 
-export async function loadDeviceContacts(authToken, deviceId, { invalidateOn401 = true } = {}) {
-  try {
+export function getCachedDeviceSummary(deviceId, authToken) {
+  const status = deviceRepository.peek(authToken, deviceId, 'status');
+  return status ? { ...composeDevice(deviceId, status.value, null), statusCached: true } : null;
+}
+
+export function getCachedDeviceDetails(deviceId, authToken) {
+  const status = deviceRepository.peek(authToken, deviceId, 'status');
+  const location = deviceRepository.peek(authToken, deviceId, 'location');
+  const contacts = deviceRepository.peek(authToken, deviceId, 'contacts');
+  if (!status || !location || !contacts) return null;
+  const device = { ...composeDevice(deviceId, status.value, location.value), contacts: contacts.value };
+  return { device, markers: buildMarkers(device) };
+}
+
+function syncRemoteName(device, authToken, options) {
+  if (authToken === getApp().getLoginToken() && (!options.isCurrent || options.isCurrent())) {
+    getApp().renameDevice(device.sn, device.name);
+  }
+}
+
+export async function loadDeviceSummary(deviceId, authToken, options = {}) {
+  const status = await loadDeviceStatus(deviceId, authToken, options);
+  const device = composeDevice(deviceId, status, null);
+  syncRemoteName(device, authToken, options);
+  return { ...device, statusCached: false };
+}
+
+export async function loadDeviceData(deviceId, authToken, options = {}) {
+  const [status, location] = await Promise.all([
+    loadDeviceStatus(deviceId, authToken, options),
+    loadDeviceInstallationLocation(deviceId, authToken, options)
+  ]);
+  const device = composeDevice(deviceId, status, location);
+  syncRemoteName(device, authToken, options);
+  return device;
+}
+
+export async function loadDeviceContacts(authToken, deviceId, options = {}) {
+  return fetchResource(deviceId, authToken, 'contacts', async () => {
     const phoneRes = await http.get('/user/userGetPhone', { deviceId }, {
       credentialScope: 'login',
       credential: authToken,
       deviceId,
-      invalidateOn401
+      invalidateOn401: false
     });
     if (phoneRes.code === 1 && Array.isArray(phoneRes.data)) {
       return phoneRes.data.map((item, index) => {
@@ -119,10 +148,7 @@ export async function loadDeviceContacts(authToken, deviceId, { invalidateOn401 
       });
     }
     throw { msg: '联系人列表返回异常，请重试' };
-  } catch (err) {
-    logger.error('获取设备联系人失败', { deviceId, error: err });
-    throw err;
-  }
+  }, options);
 }
 
 export async function loadDeviceDetails(deviceId, authToken, options = {}) {

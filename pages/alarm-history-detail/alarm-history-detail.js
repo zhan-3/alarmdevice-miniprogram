@@ -9,6 +9,7 @@ Page({
     item: null,
     loading: false,
     loadError: false,
+    refreshError: false,
     unavailable: false,
     authRetryNeeded: false,
     recordingLoading: false,
@@ -22,20 +23,36 @@ Page({
 
   async onShow() {
     if (this.authChecking) return;
+    this.detailHidden = false;
+    const token = getApp().getLoginToken();
+    if (!token || this.detailToken !== token || this.detailAlarmId !== this.data.alarmId) this.clearPrivateData();
+    this.detailToken = token;
+    this.detailAlarmId = this.data.alarmId;
     this.authChecking = true;
+    const showVersion = (this.detailShowVersion || 0) + 1;
+    this.detailShowVersion = showVersion;
     this.detailAccessReady = false;
     this.reloadAfterCurrentDetailLoad = false;
-    this.clearPrivateData();
+    this.invalidateDetailLoad();
+    this.loadingDetailRequestVersion = null;
+    this.releaseRecording();
+    this.setData({ loading: false });
     const target = `/pages/alarm-history-detail/alarm-history-detail?alarmId=${encodeURIComponent(this.data.alarmId)}`;
     const outcome = await getApp().authNavigation.restore({ target });
+    if (showVersion !== this.detailShowVersion || this.detailHidden) return;
     this.authChecking = false;
+    if (token !== getApp().getLoginToken()) {
+      this.clearPrivateData();
+      return;
+    }
     if (outcome.type === 'ready') {
       this.detailAccessReady = true;
       this.setData({ authRetryNeeded: false });
       return this.loadDetail(true);
     }
+    if (outcome.type !== 'retryable-error') this.clearPrivateData();
     if (outcome.type === 'retryable-error') {
-      this.setData({ authRetryNeeded: true, loadError: true });
+      this.setData({ authRetryNeeded: true, loadError: !this.data.item, refreshError: Boolean(this.data.item) });
     }
   },
 
@@ -67,23 +84,32 @@ Page({
   },
 
   clearPrivateData() {
+    this.detailToken = '';
+    this.detailAlarmId = '';
     this.invalidateDetailLoad();
     this.releaseRecording();
-    this.setData({ item: null, unavailable: false, loadError: false });
+    this.setData({ item: null, unavailable: false, loadError: false, refreshError: false });
   },
 
   onHide() {
+    this.detailHidden = true;
+    this.authChecking = false;
+    this.detailShowVersion = (this.detailShowVersion || 0) + 1;
+    this.detailAccessReady = false;
+    this.reloadAfterCurrentDetailLoad = false;
+    this.invalidateDetailLoad();
+    this.loadingDetailRequestVersion = null;
+    this.setData({ loading: false });
     this.releaseRecording();
   },
 
   onUnload() {
-    this.detailAccessReady = false;
-    this.reloadAfterCurrentDetailLoad = false;
-    this.invalidateDetailLoad();
-    this.releaseRecording(false);
+    this.onHide();
+    this.clearPrivateData();
   },
 
   async loadDetail(queueIfBusy = false) {
+    if (this.detailHidden) return;
     if (!this.data.alarmId || this.data.loading) {
       if (!this.data.alarmId) this.setData({ unavailable: true });
       if (this.data.loading && queueIfBusy) this.reloadAfterCurrentDetailLoad = true;
@@ -92,26 +118,33 @@ Page({
     const requestVersion = (this.detailRequestVersion || 0) + 1;
     this.detailRequestVersion = requestVersion;
     this.loadingDetailRequestVersion = requestVersion;
-    this.setData({ loading: true, loadError: false, unavailable: false });
+    const token = getApp().getLoginToken();
+    const alarmId = this.data.alarmId;
+    const isCurrent = () => !this.detailHidden && requestVersion === this.detailRequestVersion &&
+      token === getApp().getLoginToken() && alarmId === this.data.alarmId;
+    this.setData({ loading: true, loadError: false, refreshError: false, unavailable: false });
     try {
       const res = await http.get(
         `/user/alarms/history/${encodeURIComponent(this.data.alarmId)}`,
         {},
-        { credentialScope: 'login' }
+        { credentialScope: 'login', credential: token }
       );
-      if (requestVersion !== this.detailRequestVersion) return;
+      if (!isCurrent()) return;
+      this.detailToken = token;
+      this.detailAlarmId = alarmId;
       this.setData({ item: normalizeHistoryItem(res.data) });
     } catch (error) {
-      if (requestVersion !== this.detailRequestVersion) return;
+      if (!isCurrent()) return;
       logger.error('加载处理历史详情失败', { alarmId: this.data.alarmId, error });
       this.releaseRecording();
       if (error && error.code === 401) {
         this.detailAccessReady = false;
-        this.setData({ item: null, authRetryNeeded: true });
+        this.setData({ item: null, authRetryNeeded: true, loadError: true });
       } else if (error && (error.code === 403 || error.code === 404)) {
+        this.detailAccessReady = false;
         this.setData({ item: null, unavailable: true });
       } else {
-        this.setData({ item: null, loadError: true });
+        this.setData({ loadError: !this.data.item, refreshError: Boolean(this.data.item) });
       }
     } finally {
       if (this.loadingDetailRequestVersion === requestVersion) {
@@ -181,7 +214,7 @@ Page({
           fail: reject
         });
       });
-      if (requestVersion !== this.recordingRequestVersion || !this.data.item) {
+      if (requestVersion !== this.recordingRequestVersion || token !== getApp().getLoginToken() || !this.data.item) {
         this.removeTemporaryFile(path);
         return;
       }
@@ -190,13 +223,14 @@ Page({
       this.setData({ recordingPath: path });
       this.recordingAudio.play();
     } catch (error) {
-      if (requestVersion !== this.recordingRequestVersion) return;
+      if (requestVersion !== this.recordingRequestVersion || token !== getApp().getLoginToken()) return;
       this.recordingDownloadTask = null;
       logger.error('下载报警录音失败', { alarmId: this.data.alarmId, error });
-      if (error && error.code === 401) {
+      if (error && (error.code === 401 || error.code === 403 || error.code === 404)) {
         this.detailAccessReady = false;
         this.clearPrivateData();
-        wx.showToast({ title: '登录状态已失效，请重新登录', icon: 'none' });
+        this.setData({ authRetryNeeded: error.code === 401, unavailable: error.code !== 401 });
+        wx.showToast({ title: error.code === 401 ? '登录状态已失效，请重新登录' : '记录已不可访问', icon: 'none' });
         return;
       }
       wx.showToast({ title: '录音暂时不可用', icon: 'none' });
@@ -209,13 +243,13 @@ Page({
 
   openAlarmLocation() {
     const item = this.data.item;
-    if (!item || !item.hasLocation) {
+    if (!item || !item.hasLocation || !item.mapLocation) {
       wx.showToast({ title: '位置数据不可用', icon: 'none' });
       return;
     }
     wx.openLocation({
-      latitude: item.gpsLat,
-      longitude: item.gpsLng,
+      latitude: item.mapLocation.latitude,
+      longitude: item.mapLocation.longitude,
       scale: 16,
       name: `${item.deviceName || `设备 ${item.deviceSn}`} 报警位置`
     });

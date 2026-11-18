@@ -13,9 +13,14 @@ $RECYCLE.BIN/
 # Node.js
 node_modules/
 
-project.config.json
+# Shared project.config.json is versioned; machine-specific overrides are not.
 project.private.config.json
 
 # Local runtime files
+# Network captures may contain login credentials and private response data.
+*.har
+.scratch/wechat/
 .scratch/mock-server.log
 .scratch/mock-server.pid
+# Local recovery investigation, not application source.
+.scratch/conclusion-recovery/

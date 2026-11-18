@@ -1,4 +1,5 @@
-import { loadDeviceData, buildMarkers } from '../../utils/deviceService';
+import { loadDeviceData, buildMarkers, getCachedDeviceDetails } from '../../utils/deviceService';
+const { deviceRepository } = require('../../utils/deviceRepository');
 import http from '../../utils/http';
 import { getStorage, setStorage } from '../../utils/storage';
 import logger from '../../utils/logger';
@@ -35,23 +36,30 @@ Page({
   },
 
   onShow() {
+    const wasHidden = this.profileHidden;
     this.profileHidden = false;
-    if (!this.data.isDeviceSetting) return this.loadAccountProfile();
+    if (this.data.isDeviceSetting && wasHidden && this.requestedDeviceId) return this.loadDevice(this.requestedDeviceId);
+    if (!this.data.isDeviceSetting) {
+      if (this.data.profileReady && !this.profileNeedsRefresh && this.accountProfileToken === getApp().getLoginToken()) return;
+      return this.loadAccountProfile();
+    }
   },
 
   onHide() {
     this.profileHidden = true;
     this.profileRequestVersion = (this.profileRequestVersion || 0) + 1;
+    this.deviceRequestVersion = (this.deviceRequestVersion || 0) + 1;
     this.nicknameSaveVersion = (this.nicknameSaveVersion || 0) + 1;
-    this.accountProfileToken = '';
     this.setData({
-      userInfo: {}, profileReady: false, profileLoading: false,
+      profileLoading: false, deviceLoading: false,
       showNicknameModal: false, tempNickname: '', nicknameError: '', savingNickname: false
     });
   },
 
   onUnload() {
     this.onHide();
+    this.accountProfileToken = '';
+    this.setData({ userInfo: {}, profileReady: false });
   },
 
   loadUserInfo() {
@@ -69,6 +77,7 @@ Page({
     getApp().globalData.userInfo = userInfo;
     setStorage('userInfo', userInfo);
     this.accountProfileToken = token;
+    this.profileNeedsRefresh = false;
     this.setData({ userInfo, profileReady: true, profileError: '' });
   },
 
@@ -76,7 +85,11 @@ Page({
     const token = getApp().getLoginToken();
     const version = (this.profileRequestVersion || 0) + 1;
     this.profileRequestVersion = version;
-    this.setData({ profileLoading: true, profileReady: false, profileError: '', userInfo: {} });
+    const canReuse = Boolean(token && this.accountProfileToken === token && this.data.profileReady);
+    this.setData({
+      profileLoading: true, profileError: '',
+      ...(canReuse ? {} : { profileReady: false, userInfo: {} })
+    });
     try {
       if (!token) throw { code: 401 };
       const res = await http.get('/user/getMainMessage', {}, {
@@ -87,8 +100,13 @@ Page({
       this.applyAccountProfile(res.data, token);
     } catch (error) {
       if (version !== this.profileRequestVersion || this.profileHidden || getApp().getLoginToken() !== token) return;
-      this.setData({ userInfo: {}, profileError: '账号信息加载失败，请重试' });
-      if (error && error.code === 401) getApp().authNavigation.invalidate('login');
+      if (error && error.code === 401) {
+        this.accountProfileToken = '';
+        this.setData({ userInfo: {}, profileReady: false, profileError: '账号信息加载失败，请重试' });
+        getApp().authNavigation.invalidate('login');
+      } else {
+        this.setData({ profileError: '账号信息更新失败，请重试' });
+      }
     } finally {
       if (version === this.profileRequestVersion && !this.profileHidden) this.setData({ profileLoading: false });
     }
@@ -122,6 +140,7 @@ Page({
     const isCurrent = () => version === this.nicknameSaveVersion && this.isCurrentAccount(token);
     const options = { credentialScope: 'login', credential: token, invalidateOn401: false };
     let saved = false;
+    this.profileNeedsRefresh = true;
     this.setData({ savingNickname: true, nicknameError: '' });
     try {
       // 资料接口会同时更新头像：保存前重新读取，绝不以空头像覆盖未知资料。
@@ -133,7 +152,14 @@ Page({
         avatarUrl: current.data && current.data.avatarUrl != null ? current.data.avatarUrl : null
       }, options);
       saved = true;
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        // A save may finish after leaving and returning; re-read only for the same account.
+        if (getApp().getLoginToken() === token) {
+          this.profileNeedsRefresh = true;
+          if (!this.profileHidden) await this.loadAccountProfile();
+        }
+        return;
+      }
       const refreshed = await http.get('/user/getMainMessage', {}, options);
       if (!isCurrent()) return;
       if (!refreshed.data || typeof refreshed.data !== 'object' || Array.isArray(refreshed.data)) throw { msg: '账号资料返回异常，请重试' };
@@ -155,19 +181,30 @@ Page({
 
   async loadDevice(deviceId) {
     this.requestedDeviceId = deviceId;
-    this.setData({ deviceLoading: true, deviceLoadError: false });
+    const app = getApp();
+    const authToken = app.getLoginToken();
+    const version = (this.deviceRequestVersion || 0) + 1;
+    this.deviceRequestVersion = version;
+    const isCurrent = () => !this.profileHidden && version === this.deviceRequestVersion && authToken === app.getLoginToken();
+    if (this.settingDeviceToken !== authToken) this.setData({ device: null, markers: [] });
+    this.settingDeviceToken = authToken;
+    const cached = getCachedDeviceDetails(deviceId, authToken);
+    this.setData({ ...(cached || {}), deviceLoading: true, deviceLoadError: false });
     try {
-      const app = getApp();
-      const authToken = app.getLoginToken();
-      const device = await loadDeviceData(deviceId, authToken);
-      const markers = buildMarkers(device);
-      const deviceLoadError = device.status === 'unknown' && !device.address && markers.length === 0;
-      this.setData({ device, markers, deviceLoadError });
+      const device = await loadDeviceData(deviceId, authToken, { invalidateOn401: false, isCurrent });
+      if (!isCurrent()) return;
+      this.setData({ device, markers: buildMarkers(device), deviceLoadError: false });
     } catch (err) {
+      if (!isCurrent() || (err && err.code === 'STALE_DEVICE_REQUEST')) return;
       logger.error('设置页加载设备信息失败', { deviceId, error: err });
-      this.setData({ deviceLoadError: true, device: null, markers: [] });
+      if (err && (err.code === 401 || err.code === 403)) {
+        this.setData({ deviceLoadError: true, device: null, markers: [] });
+        app.authNavigation.invalidate(err.code === 401 ? 'login' : { type: 'device', sn: deviceId });
+      } else {
+        this.setData({ deviceLoadError: true });
+      }
     } finally {
-      this.setData({ deviceLoading: false });
+      if (isCurrent()) this.setData({ deviceLoading: false });
     }
   },
 
@@ -207,15 +244,17 @@ Page({
     }
 
     const app = getApp();
+    const token = app.getLoginToken();
     this.setData({ savingName: true });
     try {
       await http.post('/device/updateName', {
         deviceId: device.sn,
         name: newName
       }, {
-        credentialScope: 'login',
+        credentialScope: 'login', credential: token, invalidateOn401: false,
         deviceId: device.sn
       });
+      if (token !== app.getLoginToken()) return;
       app.renameDevice(device.sn, newName);
       this.setData({
         'device.name': newName,
@@ -224,6 +263,10 @@ Page({
       });
       wx.toast({ title: '名称已修改', icon: 'success' });
     } catch (err) {
+      if (token !== app.getLoginToken()) return;
+      if (err && (err.code === 401 || err.code === 403)) {
+        app.authNavigation.invalidate(err.code === 401 ? 'login' : { type: 'device', sn: device.sn });
+      }
       logger.error('保存设备名称失败', { deviceId: device.sn, error: err });
       if (!err || !err.userNotified) {
         wx.toast({ title: '名称保存失败，请重试', icon: 'none' });
@@ -236,6 +279,7 @@ Page({
   async chooseLocation() {
     const { device, savingLocation } = this.data;
     if (!device || savingLocation) return;
+    const token = getApp().getLoginToken();
     if (device.latitude && device.longitude) {
       const confirmed = await wx.modal({
         title: '修改安装位置',
@@ -275,8 +319,12 @@ Page({
               longitude,
               address
             }, {
-              credentialScope: 'login',
+              credentialScope: 'login', credential: token, invalidateOn401: false,
               deviceId: device.sn
+            });
+            if (token !== getApp().getLoginToken()) return;
+            deviceRepository.replace(token, device.sn, 'location', {
+              gpsLat: latitude, gpsLng: longitude, address
             });
             this.setData({
               'device.latitude': latitude,
@@ -286,6 +334,10 @@ Page({
             });
             wx.toast({ title: '安装位置已保存', icon: 'success' });
           } catch (err) {
+            if (token !== getApp().getLoginToken()) return;
+            if (err && (err.code === 401 || err.code === 403)) {
+              getApp().authNavigation.invalidate(err.code === 401 ? 'login' : { type: 'device', sn: device.sn });
+            }
             logger.error('保存设备位置失败', { deviceId: device.sn, error: err });
             if (!err || !err.userNotified) {
               wx.toast({ title: '位置保存失败，请重试', icon: 'none' });

@@ -40,6 +40,15 @@ function createAuthNavigation({
   onStateChange = () => {}
 }) {
   let restoration = null;
+  let sessionVersion = 0;
+
+  function isCurrentSession(loginToken, version) {
+    return version === sessionVersion && loginToken === storage.get('loginToken', '');
+  }
+
+  function requireCurrentSession(loginToken, version) {
+    if (!isCurrentSession(loginToken, version)) throw { code: 'STALE_AUTH_RESTORATION' };
+  }
 
   function migrateLegacyCredential() {
     const current = storage.get('loginToken', '');
@@ -61,15 +70,17 @@ function createAuthNavigation({
     });
   }
 
-  async function restoreDevices(loginToken) {
+  async function restoreDevices(loginToken, version) {
     const previouslySelectedSn = boundDeviceSet.selectedDeviceSn();
     let remoteDeviceIds;
     try {
       remoteDeviceIds = await transport.listBoundDevices(loginToken);
     } catch (error) {
+      requireCurrentSession(loginToken, version);
       if (error && error.code === 401) throw error;
       return true;
     }
+    requireCurrentSession(loginToken, version);
 
     const ids = Array.isArray(remoteDeviceIds) ? remoteDeviceIds.map(String) : [];
     const remoteIds = new Set(ids);
@@ -82,10 +93,12 @@ function createAuthNavigation({
       const existing = boundDeviceSet.get(sn);
       try {
         const remoteDevice = await transport.validateDevice(loginToken, sn);
+        requireCurrentSession(loginToken, version);
         const remoteName = remoteDevice && typeof remoteDevice.name === 'string'
           ? remoteDevice.name.trim() : '';
         boundDeviceSet.bind({ sn, name: remoteName || (existing ? existing.name : sn) });
       } catch (error) {
+        requireCurrentSession(loginToken, version);
         if (error && error.code === 401) throw error;
         if (error && error.code === 403) {
           boundDeviceSet.remove(sn);
@@ -102,15 +115,16 @@ function createAuthNavigation({
     return restorationIncomplete;
   }
 
-  async function performRestoration() {
+  async function performRestoration(version) {
     const loginToken = migrateLegacyCredential();
     if (!loginToken) {
       syncState('', null);
-      return { type: 'login-required' };
+      return { outcome: { type: 'login-required' }, version };
     }
 
     try {
       const remoteProfile = await transport.validateLogin(loginToken);
+      requireCurrentSession(loginToken, version);
       const cachedProfile = storage.get('userInfo', {}) || {};
       const profile = {
         ...cachedProfile,
@@ -124,18 +138,20 @@ function createAuthNavigation({
       else storage.remove('phone');
       if (!profile.phone) {
         syncState(loginToken, profile);
-        return { type: 'phone-required', profile };
+        return { outcome: { type: 'phone-required', profile }, version };
       }
 
-      const restorationIncomplete = await restoreDevices(loginToken);
+      const restorationIncomplete = await restoreDevices(loginToken, version);
+      requireCurrentSession(loginToken, version);
       syncState(loginToken, profile);
-      return { type: 'ready', profile, restorationIncomplete };
+      return { outcome: { type: 'ready', profile, restorationIncomplete }, version };
     } catch (error) {
+      if (!isCurrentSession(loginToken, version)) return { outcome: { type: 'superseded' }, version };
       if (error && error.code === 401) {
         clearLoginState();
-        return { type: 'login-required' };
+        return { outcome: { type: 'login-required' }, version: sessionVersion };
       }
-      return { type: 'retryable-error' };
+      return { outcome: { type: 'retryable-error' }, version };
     }
   }
 
@@ -149,27 +165,30 @@ function createAuthNavigation({
     return outcome;
   }
 
-  function restore(intent = {}) {
-    if (!restoration) restoration = performRestoration();
-    const currentRestoration = restoration;
-    return currentRestoration.then(outcome => {
+  function observeRestoration(currentRestoration, intent) {
+    return currentRestoration.then(({ outcome, version }) => {
+      // Check again before routing: even an already resolved promise can outlive logout.
+      if (version !== sessionVersion) return routeOutcome({ type: 'superseded' }, intent);
       if (outcome.type === 'retryable-error' && restoration === currentRestoration) restoration = null;
       return routeOutcome(outcome, intent);
     });
+  }
+
+  function restore(intent = {}) {
+    if (!restoration) restoration = performRestoration(sessionVersion);
+    return observeRestoration(restoration, intent);
   }
 
   function establish(credential, intent = {}) {
     if (!credential) throw new Error('登录凭证不能为空');
+    sessionVersion += 1;
     storage.set('loginToken', credential);
-    restoration = performRestoration();
-    const currentRestoration = restoration;
-    return currentRestoration.then(outcome => {
-      if (outcome.type === 'retryable-error' && restoration === currentRestoration) restoration = null;
-      return routeOutcome(outcome, intent);
-    });
+    restoration = performRestoration(sessionVersion);
+    return observeRestoration(restoration, intent);
   }
 
   function clearLoginState() {
+    sessionVersion += 1;
     storage.remove('loginToken');
     storage.remove('token');
     storage.remove('isLogin');
@@ -178,7 +197,7 @@ function createAuthNavigation({
     storage.remove('deviceTokens');
     storage.remove('currentSn');
     boundDeviceSet.clear();
-    restoration = Promise.resolve({ type: 'login-required' });
+    restoration = Promise.resolve({ outcome: { type: 'login-required' }, version: sessionVersion });
     syncState('', null);
   }
 
@@ -198,7 +217,7 @@ function createAuthNavigation({
     return { type: 'login-required', target: LOGIN_URL };
   }
 
-  return Object.freeze({ restore, establish, invalidate, logout });
+  return Object.freeze({ restore, establish, invalidate, logout, getSessionVersion: () => sessionVersion, isCurrentSession });
 }
 
 module.exports = { createAuthNavigation };

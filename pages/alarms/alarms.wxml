@@ -13,8 +13,7 @@
         <text class="alarm-section-note">需要你确认的设备报警</text>
       </view>
       <view class="profile-entry" bindtap="goProfile" aria-role="button" aria-label="打开个人设置">
-        <image wx:if="{{userInfo.avatarUrl}}" class="profile-avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill" />
-        <app-icon wx:else name="user-round" size="21" label="个人设置" />
+        <image class="profile-icon" src="/images/icons/settings-2.svg" mode="aspectFit" />
       </view>
     </view>
 
@@ -33,7 +32,7 @@
       >{{subscribing ? '开启中…' : subscriptionAccepted ? '已开启一次' : '开启一次通知'}}</button>
     </view>
 
-    <view wx:if="{{loading && alarms.length === 0}}" class="loading-screen compact-loading">
+    <view wx:if="{{loading && !hasLoaded && alarms.length === 0}}" class="loading-screen compact-loading">
       <view class="loading-spinner"></view>
       <text class="loading-text">正在整理报警记录...</text>
     </view>
@@ -45,7 +44,7 @@
       <button class="primary-button" bindtap="retryLoad">重新加载</button>
     </view>
 
-    <view wx:elif="{{!loading && alarms.length === 0}}" class="state-panel calm-state">
+    <view wx:elif="{{(!loading || hasLoaded) && alarms.length === 0}}" class="state-panel calm-state">
       <view class="state-icon calm-state-icon">
         <app-icon name="circle-check-green" size="34" label="当前无待处理报警" />
       </view>
@@ -70,7 +69,7 @@
           <view class="alarm-details">
             <view class="detail-item">
               <app-icon name="map-pin" size="15" muted="{{true}}" />
-              <text>{{item.gpsLat !== null && item.gpsLng !== null ? '已记录报警位置' : '未提供报警位置'}}</text>
+              <text>{{item.hasLocation ? '已记录报警位置' : '暂无可展示的报警位置'}}</text>
             </view>
             <view wx:if="{{item.fileId}}" class="detail-item">
               <app-icon name="audio-lines" size="15" muted="{{true}}" />
@@ -80,11 +79,9 @@
 
           <view class="alarm-actions">
             <view
-              wx:if="{{item.gpsLat !== null && item.gpsLng !== null}}"
+              wx:if="{{item.hasLocation}}"
               class="location-action"
-              data-lat="{{item.gpsLat}}"
-              data-lng="{{item.gpsLng}}"
-              data-sn="{{item.deviceSn}}"
+              data-id="{{item.alarmId}}"
               bindtap="openAlarmLocation"
               aria-role="button"
               aria-label="查看该报警的位置"
@@ -104,7 +101,7 @@
         </view>
       </view>
 
-      <view wx:if="{{loading}}" class="list-footer">正在加载...</view>
+      <view wx:if="{{loading && !refreshing}}" class="list-footer">正在加载...</view>
       <view wx:elif="{{hasMore}}" class="list-footer more-button" bindtap="loadMore" aria-role="button">加载更多记录</view>
       <view wx:else class="list-footer end-text">没有更多记录了</view>
     </view>

@@ -1,17 +1,17 @@
 <view class="container">
   <!-- 加载态 -->
-  <view wx:if="{{isLoading}}" class="loading-screen">
+  <view wx:if="{{isLoading && !device}}" class="loading-screen">
     <view class="loading-spinner"></view>
     <text class="loading-text">加载设备信息...</text>
   </view>
 
-  <view wx:elif="{{loadError}}" class="error-state">
+  <view wx:elif="{{loadError && !device}}" class="error-state">
     <text class="empty-text">设备信息加载失败</text>
     <text class="empty-hint">请检查网络连接或设备权限</text>
     <button class="retry-btn" bindtap="retryLoad">重新加载</button>
   </view>
 
-  <block wx:else>
+  <block wx:elif="{{device}}">
   <view class="map-section">
     <map
       wx:if="{{device.latitude && device.longitude}}"
@@ -31,6 +31,7 @@
       <view class="device-name-row">
         <text class="device-name-text">{{device.name}}</text>
         <view class="alarm-badge {{device.status}}">
+          <text wx:if="{{deviceCached}}">上次·</text>
           <text wx:if="{{device.status === 'alarm'}}">报警中</text>
           <text wx:elif="{{device.status === 'normal'}}">正常</text>
           <text wx:elif="{{device.status === 'offline'}}">离线</text>

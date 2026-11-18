@@ -1,6 +1,6 @@
 import { getStorage, setStorage } from '../../utils/storage';
 import http from '../../utils/http';
-import { DEVICE_STATUS_MAP } from '../../utils/constants';
+import { loadDeviceSummary, getCachedDeviceSummary } from '../../utils/deviceService';
 import logger from '../../utils/logger';
 
 Page({
@@ -8,50 +8,72 @@ Page({
     isLogin: false,
     userInfo: {},
     devices: [],
-    currentSn: '',   // 当前激活的设备SN
+    currentSn: '',
     hasPhone: false,
     pageLoading: true,
     loadError: false
   },
 
-  // 把状态映射表定义为页面私有常量（避免data读取延迟问题）
-  statusTextMap: {
-    normal: '正常',
-    alarm: '警报中',
-    offline: '设备离线'
+  renderCachedDevices(allowPlaceholders = false) {
+    const app = getApp();
+    const token = app.getLoginToken();
+    const bound = app.listBoundDevices();
+    const cached = bound.map(device => getCachedDeviceSummary(device.sn, token));
+    if (!allowPlaceholders && !cached.some(Boolean)) {
+      const allowed = new Set(bound.map(device => device.sn));
+      const remaining = this.data.devices.filter(device => allowed.has(device.sn));
+      if (remaining.length !== this.data.devices.length) this.setData({ devices: remaining });
+      return;
+    }
+    const devices = bound.map((device, index) => cached[index] || {
+      id: device.sn, sn: device.sn, name: device.name || device.sn,
+      status: 'unknown', statusText: '待更新', statusCached: false
+    });
+    this.setData({ devices, pageLoading: false });
   },
 
   async onShow() {
     this.isPageVisible = true;
     if (this.authChecking) return;
-    this.authChecking = true;
     const app = getApp();
+    const token = app.getLoginToken();
+    if (this.viewToken && this.viewToken !== token) {
+      this.setData({ devices: [], userInfo: {}, isLogin: false, pageLoading: true, loadError: false });
+    }
+    this.viewToken = token;
+    const version = (this.viewVersion || 0) + 1;
+    this.viewVersion = version;
+    this.loadDevicesTask = null;
+    this.renderCachedDevices();
+    this.authChecking = true;
     const outcome = await app.authNavigation.restore({ target: '/pages/home/home' });
+    if (!this.isPageVisible || version !== this.viewVersion) return;
     this.authChecking = false;
+    if (token !== app.getLoginToken()) {
+      this.setData({ devices: [], userInfo: {}, pageLoading: false });
+      // A cold restore may establish the first session; never reuse a prior account's view.
+      if (token || outcome.type !== 'ready' || !app.getLoginToken()) return;
+      this.viewToken = app.getLoginToken();
+    }
     if (outcome.type === 'retryable-error') {
       this.setData({ isLogin: true, pageLoading: false, loadError: true });
       return;
     }
-    if (outcome.type !== 'ready') return;
-
-    const userInfo = getStorage('userInfo') || {};
+    if (outcome.type !== 'ready') {
+      this.setData({ devices: [], userInfo: {}, isLogin: false, pageLoading: false });
+      return;
+    }
     this.setData({
-      isLogin: true,
-      hasPhone: true,
-      userInfo,
-      currentSn: app.globalData.selectedDeviceSn,
-      loadError: false
+      isLogin: true, hasPhone: true, userInfo: getStorage('userInfo') || {},
+      currentSn: app.globalData.selectedDeviceSn, loadError: false
     });
-    this.loadAllDevices().finally(() => {
-      this.setData({ pageLoading: false });
-    });
+    this.renderCachedDevices(true);
     this.startPolling();
+    return this.loadAllDevices();
   },
 
   goBindPhone() {
-    wx.reLaunch({
-      url: `/pages/login/login?redirect=${encodeURIComponent('/pages/home/home')}`
-    });
+    wx.reLaunch({ url: `/pages/login/login?redirect=${encodeURIComponent('/pages/home/home')}` });
   },
 
   startPolling() {
@@ -61,119 +83,107 @@ Page({
 
   onHide() {
     this.isPageVisible = false;
+    this.authChecking = false;
+    this.viewVersion = (this.viewVersion || 0) + 1;
+    this.loadDevicesTask = null;
     clearInterval(this.pollTimer);
     this.pollTimer = null;
   },
 
   onUnload() {
-    this.isPageVisible = false;
-    clearInterval(this.pollTimer);
-    this.pollTimer = null;
+    this.onHide();
   },
 
   async loadUserInfo() {
+    const app = getApp();
+    const token = app.getLoginToken();
+    const version = this.viewVersion;
     try {
-      const res = await http.get('/user/getMainMessage', {}, { credentialScope: 'login' });
+      const res = await http.get('/user/getMainMessage', {}, {
+        credentialScope: 'login', credential: token, invalidateOn401: false
+      });
+      if (!this.isPageVisible || version !== this.viewVersion || token !== app.getLoginToken()) return;
       if (res.code === 1 && res.data) {
         const cached = getStorage('userInfo') || {};
-        const userInfo = {
-          nickName: res.data.nickName || cached.nickName || '',
-          avatarUrl: res.data.avatarUrl || cached.avatarUrl || '',
-          phone: res.data.phone || cached.phone || ''
-        };
+        const userInfo = { ...cached, ...res.data };
         setStorage('userInfo', userInfo);
-        if (this.isPageVisible) this.setData({ userInfo });
-        return;
+        this.setData({ userInfo });
       }
-    } catch (err) {
-      logger.error('获取用户信息失败', { error: err });
+    } catch (error) {
+      if (!this.isPageVisible || token !== app.getLoginToken()) return;
+      logger.error('获取用户信息失败', { error });
+      if (error && error.code === 401) app.authNavigation.invalidate('login');
     }
-    const userInfo = getStorage('userInfo') || {};
-    if (this.isPageVisible) this.setData({ userInfo });
   },
 
-  // 使用同一登录凭证，显式指定每台设备（并行请求）
-  async loadAllDevices() {
-    if (this.isLoadingDevices) return;
-    this.isLoadingDevices = true;
-    try {
-      const app = getApp();
-      const boundDevices = app.listBoundDevices();
-
-      if (!boundDevices || boundDevices.length === 0) {
-        this.setData({ devices: [], loadError: false });
-        return;
-      }
-
-      // 并行请求所有设备状态
-      const results = await Promise.allSettled(
-        boundDevices.map(device =>
-          http.get('/user/bind/status', { deviceId: device.sn }, {
-            credentialScope: 'login',
-            deviceId: device.sn
-          }).then(bindRes => {
-            if (bindRes.code === 1 && bindRes.data) {
-              const remoteName = typeof bindRes.data.name === 'string' ? bindRes.data.name.trim() : '';
-              const displayName = remoteName || ((device.name && device.name !== device.sn) ? device.name : device.sn);
-              if (remoteName && remoteName !== device.name) app.renameDevice(device.sn, remoteName);
-              return {
-                id: device.sn,
-                sn: device.sn,
-                name: displayName,
-                status: bindRes.data.status || 'normal',
-                statusText: DEVICE_STATUS_MAP[bindRes.data.status] || '正常'
-              };
-            }
-            return null;
-          }).catch(err => {
-            logger.error('获取设备状态失败', { deviceSn: device.sn, error: err });
-            if (err && (err.code === 401 || err.code === 403)) return null;
-            const displayName = (device.name && device.name !== device.sn) ? device.name : device.sn;
-            return {
-              id: device.sn,
-              sn: device.sn,
-              name: displayName,
-              status: 'unknown',
-              statusText: '连接失败'
-            };
-          })
-        )
-      );
-
-      const devices = results
-        .map(r => r.status === 'fulfilled' ? r.value : null)
-        .filter(Boolean);
-      const loadError = devices.length > 0 && devices.every(device => device.status === 'unknown');
-
-      // 页面已隐藏时丢弃迟到结果；数据未变化时避免无意义渲染。
-      if (!this.isPageVisible) return;
-      if (JSON.stringify(devices) !== JSON.stringify(this.data.devices) || loadError !== this.data.loadError) {
-        this.setData({ devices, loadError });
-      }
-    } finally {
-      this.isLoadingDevices = false;
+  loadAllDevices(force = false) {
+    const app = getApp();
+    const token = app.getLoginToken();
+    const version = this.viewVersion;
+    const isCurrent = () => this.isPageVisible && version === this.viewVersion && token === app.getLoginToken();
+    if (!token || !isCurrent()) return Promise.resolve();
+    if (this.loadDevicesTask) {
+      if (!force) return this.loadDevicesTask;
+      // A user refresh must query membership again after an older polling cycle.
+      return this.loadDevicesTask.then(() => isCurrent() ? this.loadAllDevices() : undefined);
     }
+    let failed = false;
+    const task = app.refreshBoundDevices().then(() => {
+      if (!isCurrent()) return null;
+      this.renderCachedDevices(true);
+      this.setData({ currentSn: app.globalData.selectedDeviceSn });
+      return Promise.all(app.listBoundDevices().map(async device => {
+        try {
+          return await loadDeviceSummary(device.sn, token, { invalidateOn401: false, isCurrent });
+        } catch (error) {
+          if (!isCurrent()) return null;
+          if (error && error.code === 401) {
+            this.setData({ devices: [], userInfo: {}, isLogin: false });
+            app.authNavigation.invalidate('login');
+            return null;
+          }
+          if (error && error.code === 403) {
+            app.authNavigation.invalidate({ type: 'device', sn: device.sn });
+            return null;
+          }
+          if (!error || error.code !== 'STALE_DEVICE_REQUEST') {
+            failed = true;
+            logger.error('获取设备状态失败', { deviceSn: device.sn, error });
+          }
+          return getCachedDeviceSummary(device.sn, token) || {
+            id: device.sn, sn: device.sn, name: device.name || device.sn,
+            status: 'unknown', statusText: '连接失败', statusCached: false
+          };
+        }
+      }));
+    }).then(results => {
+      if (!isCurrent() || !results) return;
+      const allowed = new Set(app.listBoundDevices().map(device => device.sn));
+      const devices = results.filter(device => device && allowed.has(device.sn));
+      if (JSON.stringify(devices) !== JSON.stringify(this.data.devices) || failed !== this.data.loadError) {
+        this.setData({ devices, loadError: failed, pageLoading: false });
+      }
+    }).catch(error => {
+      if (!isCurrent() || (error && error.code === 'STALE_DEVICE_REQUEST')) return;
+      logger.error('刷新关联设备列表失败', { error });
+      this.setData({ loadError: true, pageLoading: false });
+    }).finally(() => {
+      if (this.loadDevicesTask === task) this.loadDevicesTask = null;
+    });
+    this.loadDevicesTask = task;
+    return task;
   },
 
   retryLoad() {
-    this.setData({ loadError: false, pageLoading: true });
-    this.onShow();
+    return this.onShow();
   },
 
-  // 下拉刷新
   onPullDownRefresh() {
-    Promise.all([
-      this.loadUserInfo(),
-      this.loadAllDevices()
-    ]).finally(() => {
-      wx.stopPullDownRefresh();
-    });
+    return Promise.all([this.loadUserInfo(), this.loadAllDevices(true)]).finally(() => wx.stopPullDownRefresh());
   },
 
   goLogin() {
-    wx.navigateTo({
-      url: '/pages/login/login'
-    });
+    wx.navigateTo({ url: '/pages/login/login' });
   },
 
   goSetting() {
@@ -181,18 +191,13 @@ Page({
   },
 
   goBindDevice() {
-    wx.navigateTo({
-      url: '/pages/devicebinding/devicebinding'
-    });
+    wx.navigateTo({ url: '/pages/devicebinding/devicebinding' });
   },
 
   goDeviceDetail(e) {
     const sn = e.currentTarget.dataset.id;
-    // 只更新客户端选中设备，不替换登录凭证
     getApp().selectDevice(sn);
     this.setData({ currentSn: sn });
-    wx.navigateTo({
-      url: `/pages/device-detail/device-detail?id=${sn}`
-    });
+    wx.navigateTo({ url: `/pages/device-detail/device-detail?id=${encodeURIComponent(sn)}` });
   }
 });

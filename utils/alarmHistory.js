@@ -1,4 +1,5 @@
 const { formatDateTime } = require('./alarmInbox');
+const { getAlarmMapLocation } = require('./alarmLocation');
 
 function stringId(value) {
   return value === null || typeof value === 'undefined' ? '' : String(value);
@@ -12,6 +13,7 @@ function normalizeHistoryItem(item) {
   const gpsLat = source.gpsLat === null || typeof source.gpsLat === 'undefined'
     ? null
     : Number(source.gpsLat);
+  const mapLocation = getAlarmMapLocation(source);
 
   return {
     ...source,
@@ -23,7 +25,8 @@ function normalizeHistoryItem(item) {
     status: 'handled',
     gpsLng: Number.isFinite(gpsLng) ? gpsLng : null,
     gpsLat: Number.isFinite(gpsLat) ? gpsLat : null,
-    hasLocation: Number.isFinite(gpsLng) && Number.isFinite(gpsLat),
+    mapLocation,
+    hasLocation: Boolean(mapLocation),
     displayAlarmTime: formatDateTime(source.alarmTime) || '时间未知',
     displayHandledAt: formatDateTime(source.handledAt) || '时间未知',
     displayHandlerName: stringId(source.handlerName) || '处理人未知'

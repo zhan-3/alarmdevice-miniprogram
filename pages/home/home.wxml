@@ -5,7 +5,7 @@
     <text class="loading-text">加载中...</text>
   </view>
 
-  <view wx:elif="{{loadError}}" class="error-state">
+  <view wx:elif="{{loadError && devices.length === 0}}" class="error-state">
     <text class="empty-text">设备数据加载失败</text>
     <text class="empty-hint">请检查网络连接后重试</text>
     <button class="retry-btn" bindtap="retryLoad">重新加载</button>
@@ -31,6 +31,8 @@
     </view>
   </view>
 
+  <text wx:if="{{loadError && devices.length > 0}}" class="empty-hint" bindtap="retryLoad">部分设备更新失败，保留上次结果，点击重试</text>
+
   <white-card customClass="device-card">
     <view wx:for="{{devices}}" wx:key="id" class="device-item" bindtap="goDeviceDetail" data-id="{{item.id}}" aria-role="button" aria-label="查看设备 {{item.name}}">
       <view class="device-info">
@@ -38,7 +40,7 @@
         <view class="device-sn">SN {{item.sn}}</view>
       </view>
       <view class="device-status-group">
-        <view class="device-status {{item.status}}">{{item.statusText}}</view>
+        <view class="device-status {{item.status}}" aria-label="最近查询状态：{{item.statusText}}">{{item.statusText}}</view>
         <app-icon name="chevron-right-gray" size="18" />
       </view>
     </view>

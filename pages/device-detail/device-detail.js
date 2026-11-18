@@ -1,6 +1,7 @@
 import http from '../../utils/http';
 import { getStorage } from '../../utils/storage';
-import { loadDeviceDetails, loadDeviceContacts } from '../../utils/deviceService';
+import { loadDeviceDetails, loadDeviceContacts, getCachedDeviceDetails } from '../../utils/deviceService';
+const { deviceRepository } = require('../../utils/deviceRepository');
 const { createRequestVersion } = require('../../utils/requestVersion');
 import { DEVICE_STATUS_MAP } from '../../utils/constants';
 import logger from '../../utils/logger';
@@ -10,6 +11,7 @@ Page({
     device: null,
     markers: [],
     isLoading: true,
+    deviceCached: false,
     showEditNameModal: false,
     showAddContactModal: false,
     tempName: '',
@@ -44,7 +46,7 @@ Page({
   onShow() {
     this.pageHidden = false;
     // 返回时重新读取，联系人显示名可能已被本人更新。
-    if (this.data.device || this.pageWasHidden) this.loadDeviceFromAPI();
+    if (this.pageWasHidden) this.loadDeviceFromAPI();
     this.pageWasHidden = false;
   },
 
@@ -58,7 +60,7 @@ Page({
     this.pageWasHidden = true;
     this.invalidateContactRequests();
     this.setData({
-      device: null, markers: [], showAddContactModal: false,
+      isLoading: false, showAddContactModal: false,
       tempContactName: '', tempContactPhone: '', contactPhoneError: '', contactSaveError: '',
       savingContact: false, contactsRefreshing: false, deletingContactId: ''
     });
@@ -86,8 +88,11 @@ Page({
   handleContactAccessError(error, scope) {
     if (!this.isContactScopeCurrent(scope)) return;
     if (error && error.code === 401) {
+      this.deviceDataScope = null;
+      this.setData({ device: null, markers: [], loadError: true, showAddContactModal: false });
       getApp().authNavigation.invalidate('login');
     } else if (error && error.code === 403) {
+      this.deviceDataScope = null;
       getApp().authNavigation.invalidate({ type: 'device', sn: scope.deviceId });
       this.setData({ device: null, markers: [], loadError: true, showAddContactModal: false });
     }
@@ -95,7 +100,7 @@ Page({
 
   // 从后端API并行加载设备状态、位置和联系人。
   async loadDeviceFromAPI() {
-    if (this.data.savingContact || this.data.contactsRefreshing || this.data.deletingContactId) return;
+    if (this.data.savingName || this.data.savingContact || this.data.contactsRefreshing || this.data.deletingContactId) return;
     if (!this.detailRequests) this.detailRequests = createRequestVersion();
     const requestVersion = this.detailRequests.begin();
     const currentSn = this.data.currentSn;
@@ -103,12 +108,22 @@ Page({
     const authToken = app.getLoginToken();
     const scope = this.captureContactScope();
 
+    if (this.deviceDataScope && (this.deviceDataScope.token !== authToken || this.deviceDataScope.deviceId !== currentSn)) {
+      this.setData({ device: null, markers: [] });
+      this.deviceDataScope = null;
+    }
     if (!currentSn || !authToken) {
-      this.setData({ isLoading: false, loadError: true });
+      this.setData({ device: null, markers: [], isLoading: false, loadError: true });
       return;
     }
 
-    this.setData({ isLoading: true, loadError: false });
+    const cached = getCachedDeviceDetails(currentSn, authToken);
+    const update = { isLoading: true, loadError: false, deviceCached: Boolean(cached || this.data.device) };
+    if (cached) {
+      this.deviceDataScope = { token: authToken, deviceId: currentSn };
+      if (JSON.stringify(cached.device) !== JSON.stringify(this.data.device)) Object.assign(update, cached);
+    }
+    this.setData(update);
     try {
       const { device, markers } = await loadDeviceDetails(currentSn, authToken, {
         invalidateOn401: false,
@@ -116,12 +131,17 @@ Page({
       });
       if (!this.detailRequests.isCurrent(requestVersion) || !this.isContactScopeCurrent(scope)) return;
       this.contactAdditionPending = false;
-      this.setData({ device, markers, contactRefreshError: '' });
+      this.deviceDataScope = { token: authToken, deviceId: currentSn };
+      this.setData({ device, markers, deviceCached: false, contactRefreshError: '' });
     } catch (err) {
       if (!this.detailRequests.isCurrent(requestVersion) || !this.isContactScopeCurrent(scope)) return;
+      if (err && err.code === 'STALE_DEVICE_REQUEST') return;
       logger.error('加载设备详情失败', { error: err });
-      this.setData({ loadError: true, device: null, markers: [] });
+      this.setData({ loadError: true });
       this.handleContactAccessError(err, scope);
+      if (this.data.device && (!err || !err.userNotified)) {
+        wx.toast({ title: '更新失败，当前显示上次内容', icon: 'none' });
+      }
     } finally {
       if (this.detailRequests.isCurrent(requestVersion) && this.isContactScopeCurrent(scope)) {
         this.setData({ isLoading: false });
@@ -157,16 +177,19 @@ Page({
     }
 
     const newName = tempName.trim();
+    if (this.detailRequests) this.detailRequests.begin();
     const app = getApp();
+    const token = app.getLoginToken();
     this.setData({ savingName: true });
     try {
       await http.post('/device/updateName', {
         deviceId: currentSn,
         name: newName
       }, {
-        credentialScope: 'login',
+        credentialScope: 'login', credential: token, invalidateOn401: false,
         deviceId: currentSn
       });
+      if (token !== app.getLoginToken()) return;
       app.renameDevice(currentSn, newName);
       this.setData({
         'device.name': newName,
@@ -175,6 +198,11 @@ Page({
       });
       wx.toast({ title: '保存成功', icon: 'success' });
     } catch (err) {
+      if (token !== app.getLoginToken()) return;
+      if (err && (err.code === 401 || err.code === 403)) {
+        this.setData({ device: null, markers: [], loadError: true });
+        app.authNavigation.invalidate(err.code === 401 ? 'login' : { type: 'device', sn: currentSn });
+      }
       logger.error('保存设备名称失败', { deviceId: currentSn, error: err });
       if (!err || !err.userNotified) {
         wx.toast({ title: '名称保存失败，请重试', icon: 'none' });
@@ -274,6 +302,7 @@ Page({
     const scope = this.captureContactScope();
     if (!this.isContactScopeCurrent(scope)) return;
     // 废弃添加前发起的整页读取，避免旧列表晚到覆盖权威刷新结果。
+    deviceRepository.invalidate(scope.token, scope.deviceId, 'contacts');
     if (this.detailRequests) this.detailRequests.begin();
     this.setData({ savingContact: true, isLoading: false, contactSaveError: '' });
     try {
@@ -282,6 +311,7 @@ Page({
         {},
         { credentialScope: 'login', credential: scope.token, deviceId: scope.deviceId, invalidateOn401: false }
       );
+      if (res.code === 1) deviceRepository.invalidate(scope.token, scope.deviceId, 'contacts');
       if (!this.isContactScopeCurrent(scope)) return;
       if (res.code !== 1) throw res;
       this.contactAdditionPending = true;
@@ -315,9 +345,11 @@ Page({
       const delRes = await http.delete(`/user/deletePhone?deviceId=${encodeURIComponent(scope.deviceId)}&number=${encodeURIComponent(contact.phone)}`, {}, {
         credentialScope: 'login', credential: scope.token, deviceId: scope.deviceId, invalidateOn401: false
       });
+      if (delRes.code === 1) deviceRepository.invalidate(scope.token, scope.deviceId, 'contacts');
       if (!this.isContactScopeCurrent(scope) || !this.data.device) return;
       if (delRes.code === 1) {
         const contacts = this.data.device.contacts.filter(c => c.phone !== contact.phone);
+        deviceRepository.replace(scope.token, scope.deviceId, 'contacts', contacts);
         this.setData({ 'device.contacts': contacts, swipeId: null, swipeOffset: 0 });
         wx.toast({ title: '删除成功', icon: 'success' });
       }

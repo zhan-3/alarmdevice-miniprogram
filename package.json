@@ -4,7 +4,10 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "wx:open": "node scripts/wechat.cjs open",
+    "wx:preview": "node scripts/wechat.cjs preview",
+    "wx:upload": "npm test && node scripts/wechat.cjs upload"
   },
   "keywords": [],
   "author": "",

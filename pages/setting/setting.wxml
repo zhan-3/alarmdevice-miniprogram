@@ -2,8 +2,8 @@
   <scroll-view class="setting-scroll" scroll-y>
     <!-- 账号信息（仅主页进入时展示） -->
     <white-card wx:if="{{!isDeviceSetting}}" title="账号信息" titleIcon="user-round" customClass="setting-module-card">
-      <view wx:if="{{profileLoading}}" class="account-feedback">正在读取账号信息…</view>
-      <view wx:elif="{{profileError}}" class="account-feedback">
+      <view wx:if="{{profileLoading && !profileReady}}" class="account-feedback">正在读取账号信息…</view>
+      <view wx:elif="{{profileError && !profileReady}}" class="account-feedback">
         <text>{{profileError}}</text>
         <button class="account-retry" bindtap="loadAccountProfile">重新加载</button>
       </view>
@@ -21,19 +21,20 @@
           </button>
         </view>
         <text class="nickname-note">昵称用于共同设备的联系人和处理历史，有权查看这些信息的用户可见。可不填写。</text>
+        <view wx:if="{{profileError}}" class="account-feedback" bindtap="loadAccountProfile">{{profileError}}，点击重试</view>
       </block>
     </white-card>
 
-    <view wx:if="{{isDeviceSetting && deviceLoading}}" class="loading-screen">
+    <view wx:if="{{isDeviceSetting && deviceLoading && !device}}" class="loading-screen">
       <text class="loading-text">加载设备信息...</text>
     </view>
-    <view wx:elif="{{isDeviceSetting && deviceLoadError}}" class="error-state">
+    <view wx:elif="{{isDeviceSetting && deviceLoadError && !device}}" class="error-state">
       <text class="empty-text">设备信息加载失败</text>
       <text class="empty-hint">请检查网络连接或设备权限</text>
       <button class="retry-btn" bindtap="retryLoadDevice">重新加载</button>
     </view>
 
-    <block wx:if="{{isDeviceSetting && device && !deviceLoading && !deviceLoadError}}">
+    <block wx:if="{{isDeviceSetting && device}}">
       <white-card title="设备位置设置" titleIcon="map-pin" customClass="setting-module-card">
         <view class="location-card">
           <view class="location-map">

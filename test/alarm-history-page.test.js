@@ -14,7 +14,7 @@ function loadHistoryPage({ http, logger = { error() {} }, wx = {}, app = {} }) {
     __deps: { http, logger },
     Page(value) { definition = value; },
     wx,
-    getApp() { return app; },
+    getApp() { return { getLoginToken: () => 'session-A', ...app }; },
     require(request) {
       if (request.endsWith('/alarmHistory')) return require('../utils/alarmHistory');
       throw new Error(`Unexpected require: ${request}`);
@@ -140,7 +140,7 @@ test('invalidates an in-flight response immediately when filters change and then
   assert.equal(page.data.loading, false);
 });
 
-test('revalidates history on every show and hides the previous list while permission is checked', async () => {
+test('revalidates history on every show without hiding the previous list', async () => {
   const second = deferred();
   const staleHandlers = deferred();
   let restores = 0;
@@ -170,8 +170,9 @@ test('revalidates history on every show and hides the previous list while permis
 
   const showingAgain = page.onShow();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(page.data.items.length, 0);
+  assert.equal(page.data.items[0].alarmId, 'visible');
   assert.equal(page.data.loading, true);
+  assert.equal(page.data.refreshing, true);
   assert.equal(page.data.handlers.length, 0);
   assert.equal(page.data.handlersLoading, false);
 
@@ -182,6 +183,119 @@ test('revalidates history on every show and hides the previous list while permis
   assert.equal(requests, 2);
   assert.equal(page.data.items.length, 0);
   assert.equal(page.data.handlers.length, 0);
+});
+
+test('returning refresh rebuilds loaded pages without discarding pagination or filters', async () => {
+  const requests = [];
+  const definition = loadHistoryPage({
+    app: { authNavigation: { async restore() { return { type: 'ready' }; } } },
+    http: { async get(_url, data) {
+      requests.push(data);
+      return data.cursor
+        ? { data: { items: [{ alarmId: 'second' }], nextCursor: 'next-3', hasMore: true } }
+        : { data: { items: [{ alarmId: 'first' }], nextCursor: 'next-2', hasMore: true } };
+    } }
+  });
+  const page = createPage(definition, { keywordInput: 'SN-A', hasActiveFilters: true });
+  page.historyToken = 'session-A';
+  page.appliedFilters = { keyword: 'SN-A' };
+  await page.onShow();
+  await page.loadHistory(false);
+  page.onHide();
+  assert.equal(page.data.items.length, 2);
+  await page.onShow();
+  assert.equal(page.data.items.length, 2);
+  assert.equal(page.data.nextCursor, 'next-3');
+  assert.equal(requests.length, 4);
+  assert.ok(requests.every(item => item.keyword === 'SN-A'));
+});
+
+test('changing account clears history before auth completes and ignores the old response', async () => {
+  let token = 'account-A';
+  const old = deferred();
+  const auth = deferred();
+  const definition = loadHistoryPage({
+    app: { getLoginToken: () => token, authNavigation: { restore: () => auth.promise } },
+    http: { get: () => old.promise }
+  });
+  const page = createPage(definition, { items: [{ alarmId: 'A' }], hasLoaded: true });
+  page.historyToken = token;
+  const loading = page.loadHistory(true);
+  token = 'account-B';
+  const showing = page.onShow();
+  assert.equal(page.data.items.length, 0);
+  old.resolve({ data: { items: [{ alarmId: 'late-A' }] } });
+  await loading;
+  assert.equal(page.data.items.length, 0);
+  auth.resolve({ type: 'login-required' });
+  await showing;
+});
+
+test('background refresh is atomic across pages and transient failures preserve the loaded window', async () => {
+  const second = deferred();
+  const definition = loadHistoryPage({
+    http: { get(_url, data) {
+      return data.cursor ? second.promise : Promise.resolve({ data: {
+        items: [{ alarmId: 'new-first' }], nextCursor: 'new-cursor', hasMore: true
+      } });
+    } }
+  });
+  const page = createPage(definition, {
+    items: [{ alarmId: 'old-first' }, { alarmId: 'old-second' }],
+    nextCursor: 'old-cursor', hasMore: true, hasLoaded: true
+  });
+  page.historyPageCount = 2;
+  const loading = page.loadHistory(true, true, true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(page.data.items.map(item => item.alarmId), ['old-first', 'old-second']);
+  second.reject({ code: -1 });
+  await loading;
+  assert.deepEqual(page.data.items.map(item => item.alarmId), ['old-first', 'old-second']);
+  assert.equal(page.data.nextCursor, 'old-cursor');
+  assert.equal(page.data.refreshError, true);
+  assert.equal(page.data.loading, false);
+});
+
+test('hiding history invalidates pending list and auth requests without clearing its view', async () => {
+  const pending = deferred();
+  const auth = deferred();
+  let reads = 0;
+  const definition = loadHistoryPage({
+    app: { authNavigation: { restore: () => auth.promise } },
+    http: { get() { reads += 1; return pending.promise; } }
+  });
+  const page = createPage(definition, { items: [{ alarmId: 'old' }], hasLoaded: true });
+  const loading = page.loadHistory(true);
+  page.onHide();
+  pending.resolve({ data: { items: [{ alarmId: 'late' }] } });
+  await loading;
+  assert.equal(page.data.items[0].alarmId, 'old');
+  assert.equal(page.data.loading, false);
+  const showing = page.onShow();
+  page.onHide();
+  auth.resolve({ type: 'ready' });
+  await showing;
+  assert.equal(reads, 1);
+  assert.equal(page.data.items[0].alarmId, 'old');
+});
+
+test('an explicit permission failure removes cached history and handler names', async () => {
+  const definition = loadHistoryPage({ http: { async get() { throw { code: 403 }; } } });
+  const page = createPage(definition, {
+    items: [{ alarmId: 'private' }], handlers: [{ id: '1', name: 'private-name' }],
+    hasLoaded: true, nextCursor: 'private-cursor'
+  });
+  await page.loadHistory(true);
+  assert.equal(page.data.items.length, 0);
+  assert.equal(page.data.handlers.length, 0);
+  assert.equal(page.data.nextCursor, '');
+});
+
+test('history template keeps successful empty states and suppresses background loading footers', () => {
+  const template = fs.readFileSync(path.join(__dirname, '../pages/alarm-history/alarm-history.wxml'), 'utf8');
+  assert.match(template, /loading && !hasLoaded && items.length === 0/);
+  assert.match(template, /\(!loading \|\| hasLoaded\) && items.length === 0/);
+  assert.match(template, /loading && !refreshing/);
 });
 
 test('clears existing history when a refresh reports an invalid login credential', async () => {

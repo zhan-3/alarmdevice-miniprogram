@@ -1,5 +1,7 @@
 # AlarmDevice · 微信小程序
 
+> **结题恢复候选（2026-11-18）**：由远端源码与历史开发 session 重建，尚未上传、提审或发布。开发环境已按用户确认临时切回生产 API（真实数据，慎点写操作）；恢复证据、回归测试结果与待验收项见 [恢复与结题验收记录](docs/recovery-conclusion.md)。
+
 面向报警设备负责人的微信小程序，提供设备绑定、报警查看与确认、处理历史查询，以及报警位置和录音查看。
 
 本仓库是 **AlarmDevice 的小程序客户端**，不包含生产 Java 后端。完整系统介绍、管理网站、数据库迁移和生产部署说明见 [alarmdevice](https://github.com/zhan-3/alarmdevice)。
@@ -30,6 +32,7 @@
 
 - **“已处理”仅表示人工确认，不代表设备恢复正常。**
 - 安装位置属于设备共享信息；报警位置属于某一次报警事件，二者不同。
+- 硬件报警WGS-84原始坐标由后端转换为GCJ-02展示字段，小程序只读取 `displayLocation`，不自行转换或在字段缺失时回退原始GPS。安装位置不参与该转换；接口与发布顺序见[报警地图坐标](docs/alarm-coordinate-display.md)。
 - 设备别名属于当前用户，同一台设备可有不同用户别名。
 - 处理历史只展示当前登录用户**仍绑定设备的已处理报警**，不要求由本人处理。
 - 解绑后重新请求历史列表、详情和录音，服务端会重新校验访问权限。
@@ -77,7 +80,7 @@
 ### 2. 获取源码
 
 ```bash
-git clone git@github.com:zhan-3/alarmdevice-miniprogram.git
+git clone --branch feat/perf-optimize-components-lazy-load git@github.com:zhan-3/alarmdevice-miniprogram.git
 cd alarmdevice-miniprogram
 ```
 
@@ -89,7 +92,7 @@ cd alarmdevice-miniprogram
 
 | 环境 | 当前默认地址 |
 | --- | --- |
-| develop | `https://bridgemonitor.xyz` |
+| develop | `https://bridgemonitor.xyz`（用户确认的临时生产联调；真实数据） |
 | trial | `https://bridgemonitor.xyz` |
 | release | `https://bridgemonitor.xyz` |
 
@@ -106,6 +109,31 @@ cd alarmdevice-miniprogram
 5. 解绑后的权限复验、网络失败重试及离开页面后的录音清理。
 
 开发者工具验证不能代替真机验收，尤其是订阅通知、地图、隐私授权与音频播放。
+
+## 本机 CLI（无需额外依赖）
+
+先登录微信开发者工具，在「设置 → 安全设置」开启服务端口，确认账号有对应小程序的开发权限。
+
+```bash
+npm run wx:open
+npm run wx:preview
+npm run wx:upload -- 1.0.1 "修复设备切换"
+```
+
+- `wx:open` 打开当前项目并触发编译刷新。
+- `wx:preview` 生成 `.scratch/wechat/preview.png`，扫码真机预览；结果信息同目录保存。
+- `wx:upload` 先运行全部 Node 测试，通过后上传开发版本；版本号和描述必填。设为体验版、提审、发布仍需在微信后台人工操作。
+- CLI 日志直接显示，失败返回非零退出码；重新预览/上传前清理对应旧产物，避免误用过期结果。
+
+脚本自动查找常见安装路径。找不到时设置 `WECHAT_CLI`，例如 PowerShell：
+
+```powershell
+$env:WECHAT_CLI = 'C:\Program Files (x86)\Tencent\微信web开发者工具\cli.bat'
+```
+
+macOS 可设置为 `/Applications/wechatwebdevtools.app/Contents/MacOS/cli`。Windows 路径及参数不支持双引号、百分号和换行；描述用命令行引号包围即可，不要包含这些字符。此方案复用开发者工具登录态，不需要上传私钥或 `miniprogram-ci`。
+
+官方参考：[命令行 V2](https://developers.weixin.qq.com/miniprogram/dev/devtools/cli.html)。
 
 ## 微信后台配置
 

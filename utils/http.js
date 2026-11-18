@@ -11,9 +11,21 @@ function isValidToken(token) {
   return !/[\u4e00-\u9fa5]/.test(token)
 }
 
-function invalidateCredential() {
+function isCurrentCredential(credential, sessionVersion) {
   const app = getApp()
-  if (app.authNavigation) app.authNavigation.invalidate('login')
+  const auth = app.authNavigation
+  // During first login/cold restoration, storage owns the pending credential;
+  // App global state is published only after its profile has been validated.
+  if (typeof auth?.isCurrentSession === 'function') {
+    return auth.isCurrentSession(credential, sessionVersion ?? auth.getSessionVersion())
+  }
+  return credential === app.getLoginToken() &&
+    (sessionVersion === undefined || sessionVersion === auth?.getSessionVersion?.())
+}
+
+function invalidateCredential(credential, sessionVersion) {
+  const app = getApp()
+  if (isCurrentCredential(credential, sessionVersion) && app.authNavigation) app.authNavigation.invalidate('login')
 }
 
 function request({
@@ -26,7 +38,8 @@ function request({
   deviceId = '',
   invalidateOn401 = true,
   allowDeviceRequired = false,
-  retryCount = 0
+  retryCount = 0,
+  sessionVersion
 }) {
   return new Promise((resolve, reject) => {
     const requestId = ++requestSequence
@@ -35,11 +48,12 @@ function request({
     const requestPath = String(url).split('?')[0]
     const app = getApp()
     const authCredential = credential || (credentialScope !== 'none' ? app.getLoginToken() : '')
+    const requestSessionVersion = sessionVersion ?? app.authNavigation?.getSessionVersion?.()
     logger.info('请求开始', { requestId, method, url: requestPath, credentialScope })
 
     if (credentialScope !== 'none' && !isValidToken(authCredential)) {
       logger.error('凭证格式无效', { requestId, url: requestPath, credentialScope })
-      if (invalidateOn401) invalidateCredential()
+      if (invalidateOn401) invalidateCredential(authCredential, requestSessionVersion)
       reject({ code: 401, msg: '无效token', credentialScope })
       return
     }
@@ -66,17 +80,24 @@ function request({
             credentialScope,
             durationMs: Date.now() - startedAt
           })
-          if (invalidateOn401) invalidateCredential()
+          if (invalidateOn401) invalidateCredential(authCredential, requestSessionVersion)
           reject({ code: 401, msg: '请提供有效的token', credentialScope })
           return
         }
 
         if (authResponse.type === 'device-required') {
           logger.warn('请求缺少设备权限', { requestId, url: requestPath, statusCode, durationMs: Date.now() - startedAt })
-          if (deviceId && invalidateOn401 && app.authNavigation) {
+          if (deviceId && invalidateOn401 && app.authNavigation && isCurrentCredential(authCredential, requestSessionVersion)) {
             app.authNavigation.invalidate({ type: 'device', sn: deviceId })
           }
           reject({ code: 403, msg: (responseData && (responseData.msg || responseData.message)) || '设备访问权限已失效' })
+          return
+        }
+
+        // Even a successful old request must not expose the previous user's data
+        // after logout/account switching (including reuse of the same JWT value).
+        if (credentialScope !== 'none' && !isCurrentCredential(authCredential, requestSessionVersion)) {
+          reject({ code: 'STALE_AUTH_REQUEST', msg: '登录状态已变化，请重新加载' })
           return
         }
 
@@ -131,7 +152,8 @@ function request({
               data,
               headers,
               credentialScope,
-              credential,
+              credential: authCredential,
+              sessionVersion: requestSessionVersion,
               deviceId,
               invalidateOn401,
               allowDeviceRequired,

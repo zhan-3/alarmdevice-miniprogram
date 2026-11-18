@@ -5,9 +5,11 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 function loadSettingPage({ http, logger, wx, app, storage = {} }) {
+  const repository = require('../utils/deviceRepository').createDeviceRepository();
+  repository.syncSession(app.getLoginToken ? app.getLoginToken() : 'same-user-jwt', ['DEVICE-A']);
   const pagePath = path.join(__dirname, '../pages/setting/setting.js');
   const source = fs.readFileSync(pagePath, 'utf8')
-    .replace("import { loadDeviceData, buildMarkers } from '../../utils/deviceService';", 'const { loadDeviceData, buildMarkers } = globalThis.__deps;')
+    .replace("import { loadDeviceData, buildMarkers, getCachedDeviceDetails } from '../../utils/deviceService';", 'const { loadDeviceData, buildMarkers, getCachedDeviceDetails } = globalThis.__deps;')
     .replace("import http from '../../utils/http';", 'const http = globalThis.__deps.http;')
     .replace("import { getStorage, setStorage } from '../../utils/storage';", 'const { getStorage, setStorage } = globalThis.__deps;')
     .replace("import logger from '../../utils/logger';", 'const logger = globalThis.__deps.logger;');
@@ -18,15 +20,17 @@ function loadSettingPage({ http, logger, wx, app, storage = {} }) {
       http,
       logger,
       loadDeviceData: async () => null,
+      getCachedDeviceDetails: () => null,
       buildMarkers: () => [],
       getStorage: key => storage[key] || null,
       setStorage: (key, value) => { storage[key] = value; }
     },
     Page(value) { definition = value; },
     wx,
-    getApp() { return app; },
+    getApp() { return { getLoginToken: () => 'same-user-jwt', ...app }; },
     require(request) {
       if (request.endsWith('/localSettings')) return require('../utils/localSettings');
+      if (request.endsWith('/deviceRepository')) return { deviceRepository: repository };
       throw new Error(`Unexpected require: ${request}`);
     },
     console,
@@ -159,6 +163,83 @@ test('nickname requests do not overwrite another account or an unloaded page and
     assert.equal(storage.userInfo.nickName, '当前账号');
     assert.equal(app.globalData.userInfo.nickName, '当前账号');
   }
+});
+
+test('account profile survives a same-account return but is cleared before loading another account', async () => {
+  let token = 'account-A';
+  let reads = 0;
+  let finish;
+  const definition = loadSettingPage({
+    app: { globalData: {}, getLoginToken: () => token }, wx: {}, logger: { error() {} },
+    http: { get() {
+      reads += 1;
+      if (reads === 1) return Promise.resolve({ data: { nickName: 'A' } });
+      return new Promise(resolve => { finish = resolve; });
+    } }
+  });
+  const page = createPage(definition, {});
+  await page.onShow();
+  page.onHide();
+  assert.equal(page.data.userInfo.nickName, 'A');
+  assert.equal(page.data.profileReady, true);
+  await page.onShow();
+  assert.equal(reads, 1);
+  token = 'account-B';
+  const showing = page.onShow();
+  assert.equal(page.data.profileReady, false);
+  assert.equal(page.data.userInfo.nickName, undefined);
+  finish({ data: { nickName: 'B' } });
+  await showing;
+  assert.equal(page.data.userInfo.nickName, 'B');
+});
+
+test('a profile refresh keeps current values on network errors but clears them on 401', async () => {
+  let fail = false;
+  const invalidations = [];
+  const definition = loadSettingPage({
+    app: { globalData: {}, getLoginToken: () => 'account-A', authNavigation: { invalidate: scope => invalidations.push(scope) } },
+    wx: {}, logger: { error() {} },
+    http: { async get() {
+      if (fail) throw { code: fail };
+      return { data: { nickName: 'A' } };
+    } }
+  });
+  const page = createPage(definition, {});
+  await page.onShow();
+  fail = -1;
+  const refreshing = page.loadAccountProfile();
+  assert.equal(page.data.profileReady, true);
+  assert.equal(page.data.userInfo.nickName, 'A');
+  await refreshing;
+  assert.equal(page.data.profileReady, true);
+  fail = 401;
+  await page.loadAccountProfile();
+  assert.equal(page.data.profileReady, false);
+  assert.equal(page.data.userInfo.nickName, undefined);
+  assert.deepEqual(invalidations, ['login']);
+});
+
+test('a nickname save finishing after return refreshes the visible same-account profile', async () => {
+  let finishSave;
+  let saved = false;
+  const definition = loadSettingPage({
+    app: { globalData: {}, getLoginToken: () => 'account-A' }, wx: {}, logger: { error() {} },
+    http: {
+      async get() { return { data: { nickName: saved ? '新昵称' : '原昵称' } }; },
+      post() { return new Promise(resolve => { finishSave = () => { saved = true; resolve({ code: 1 }); }; }); }
+    }
+  });
+  const page = createPage(definition, {});
+  await page.onShow();
+  page.editNickname();
+  page.onNicknameInput({ detail: { value: '新昵称' } });
+  const saving = page.saveNickname();
+  await new Promise(resolve => setImmediate(resolve));
+  page.onHide();
+  await page.onShow();
+  finishSave();
+  await saving;
+  assert.equal(page.data.userInfo.nickName, '新昵称');
 });
 
 test('device name request carries deviceId and uses only user login authentication', async () => {

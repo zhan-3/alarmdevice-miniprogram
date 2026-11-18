@@ -88,7 +88,9 @@
     <view wx:elif="{{handlers.length === 0}}" class="handler-state">没有匹配的处理人</view>
   </view>
 
-  <view wx:if="{{loading && items.length === 0}}" class="loading-screen history-loading">
+  <view wx:if="{{refreshError}}" class="list-footer retry-more" bindtap="retryLoad" aria-role="button">更新失败，当前显示上次内容，点击重试</view>
+
+  <view wx:if="{{loading && !hasLoaded && items.length === 0}}" class="loading-screen history-loading">
     <view class="loading-spinner"></view>
     <text class="loading-text">正在加载处理历史…</text>
   </view>
@@ -100,7 +102,7 @@
     <button class="primary-button retry-button" bindtap="retryLoad">重新加载</button>
   </view>
 
-  <view wx:elif="{{!loading && items.length === 0}}" class="state-panel calm-state">
+  <view wx:elif="{{(!loading || hasLoaded) && items.length === 0}}" class="state-panel calm-state">
     <view class="state-icon"><app-icon name="clipboard-list" size="40" muted="{{true}}" label="暂无处理历史" /></view>
     <text class="state-title">{{hasActiveFilters ? '没有符合条件的记录' : '还没有处理历史'}}</text>
     <text class="state-hint">{{hasActiveFilters ? '可调整日期、处理人或关键词' : '已处理的报警会显示在这里'}}</text>
@@ -137,7 +139,7 @@
       <image class="row-arrow" src="/images/icons/chevron-right-gray.svg" mode="aspectFit" />
     </view>
 
-    <view wx:if="{{loading}}" class="list-footer">正在加载更多…</view>
+    <view wx:if="{{loading && !refreshing}}" class="list-footer">正在加载更多…</view>
     <view wx:elif="{{loadMoreError}}" class="list-footer retry-more" bindtap="retryLoad">加载失败，点击重试</view>
     <view wx:elif="{{hasMore}}" class="list-footer">继续上拉加载</view>
     <view wx:else class="list-footer end-text">已显示全部处理历史</view>

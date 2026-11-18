@@ -65,10 +65,17 @@ function createBoundDeviceSet(storage) {
     persist();
     return true;
   }
+  function reconcile(ids) {
+    const existing = new Map(devices.map(device => [device.sn, device]));
+    devices = [...new Set(ids)].map(sn => cloneDevice(existing.get(sn) || { sn }));
+    if (!devices.some(device => device.sn === selectedSn)) selectedSn = devices[0]?.sn || '';
+    persist();
+    return list();
+  }
   function clear() { devices = []; selectedSn = ''; persist(); }
 
   restore();
-  return Object.freeze({ list, get, selectedDeviceSn: () => selectedSn, select, bind, rename, remove, clear, restore });
+  return Object.freeze({ list, get, selectedDeviceSn: () => selectedSn, select, bind, rename, remove, reconcile, clear, restore });
 }
 
 module.exports = { createBoundDeviceSet };

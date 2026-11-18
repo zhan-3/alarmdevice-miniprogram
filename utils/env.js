@@ -1,8 +1,9 @@
 const { miniProgram } = wx.getAccountInfoSync()
 const { envVersion } = miniProgram
 
-// 微信开发者工具中的开发版可以访问本机；真机调试时请改为同一局域网内可访问的地址。
-// 体验版和正式版必须使用已在微信公众平台登记的 HTTPS 合法域名。
+// 2026-11-18 经用户确认，开发版临时连接生产，用于恢复后的联调。
+// 登录、设备与报警读取均访问真实数据；不要随意确认报警、修改绑定或试发通知。
+// 恢复隔离开发时将 develop 改为 http://127.0.0.1:8080；上传/发布仍须单独确认。
 const API_BASE_URLS = Object.freeze({
   develop: 'https://bridgemonitor.xyz',
   trial: 'https://bridgemonitor.xyz',
